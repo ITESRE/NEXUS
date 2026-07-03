@@ -19,6 +19,7 @@ type RequestWithUser = {
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Get()
   findAll() {
     return this.postsService.findAll();
