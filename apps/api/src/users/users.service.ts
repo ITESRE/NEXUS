@@ -40,11 +40,9 @@ export class UsersService {
     return user;
   }
 
-  async create(createUserDto: CreateUserDto) {
+    async create(createUserDto: CreateUserDto) {
     const existingUser = await this.prisma.user.findUnique({
-      where: {
-        email: createUserDto.email,
-      },
+      where: { email: createUserDto.email },
     });
 
     if (existingUser) {
@@ -64,7 +62,6 @@ export class UsersService {
         passwordHash,
         firstName: createUserDto.firstName,
         lastName: createUserDto.lastName,
-        role: createUserDto.role ?? 'USER',
       },
       select: this.safeUserSelect,
     });
