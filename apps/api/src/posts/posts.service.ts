@@ -6,6 +6,7 @@ import {
 import { UserRole, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 
 type CurrentUser = {
   userId: string;
@@ -187,4 +188,43 @@ export class PostsService {
       },
     });
   }
+
+  async update(id: string, updatePostDto: UpdatePostDto, currentUser: any) {
+  const post = await this.prisma.post.findFirst({
+    where: {
+      id,
+      deletedAt: null,
+    },
+  });
+
+  if (!post) {
+    throw new NotFoundException('Post introuvable');
+  }
+
+  if (post.authorId !== currentUser.userId) {
+    throw new ForbiddenException('Vous ne pouvez modifier que vos propres posts');
+  }
+
+  return this.prisma.post.update({
+    where: { id },
+    data: {
+      content: updatePostDto.content,
+    },
+    include: {
+      author: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+}
+
 }

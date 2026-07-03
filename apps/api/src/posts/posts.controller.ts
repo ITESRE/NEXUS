@@ -4,14 +4,16 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Req,
-  UseGuards,
+  UseGuards
 } from '@nestjs/common';
 import { UserRole, UserStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostsService } from './posts.service';
+import { UpdatePostDto } from './dto/update-post.dto';
 
 type RequestWithUser = {
   user: {
@@ -51,4 +53,14 @@ export class PostsController {
   softDelete(@Param('id') id: string, @Req() req: RequestWithUser) {
     return this.postsService.softDelete(id, req.user);
   }
+  
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() updatePostDto: UpdatePostDto,
+    @Req() req: RequestWithUser,
+    ) {
+        return this.postsService.update(id, updatePostDto, req.user);
+        }
 }
