@@ -72,4 +72,12 @@ export class UsersService {
     where: { email },
   });
   }
+
+  async findByIdForAuth(id: string) {
+  return this.prisma.user.findUnique({
+    where: { id },
+    select: this.safeUserSelect,
+  });
+  }
+
 }

@@ -1,6 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
+import { UserRole, UserStatus } from '@prisma/client';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { UsersService } from '../users/users.service';
+
+type JwtPayload = {
+  sub?: string;
+  email?: string;
+  role?: UserRole;
+};
 
 function getJwtAccessSecret(): string {
   const secret = process.env.JWT_ACCESS_SECRET;
@@ -14,7 +22,7 @@ function getJwtAccessSecret(): string {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly usersService: UsersService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -22,11 +30,28 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: any) {
+  async validate(payload: JwtPayload) {
+    if (!payload.sub) {
+      throw new UnauthorizedException('Token invalide');
+    }
+
+    const user = await this.usersService.findByIdForAuth(payload.sub);
+
+    if (!user) {
+      throw new UnauthorizedException('Token invalide');
+    }
+
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Compte désactivé');
+    }
+
     return {
-      userId: payload.sub,
-      email: payload.email,
-      role: payload.role,
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      status: user.status,
     };
   }
 }
