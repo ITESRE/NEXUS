@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class PostsService {
@@ -62,4 +62,56 @@ export class PostsService {
       },
     });
   }
+
+   async findOne(id: string) {
+    const post = await this.prisma.post.findFirst({
+        where: {
+            id,
+            deletedAt: null,
+        },
+        select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+        author: {
+            select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            status: true,
+            },
+        },
+        comments: {
+            orderBy: {
+            createdAt: 'asc',
+            },
+            select: {
+                id: true,
+                content: true,
+                createdAt: true,
+                updatedAt: true,
+            author: {
+                select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+                status: true,
+                },
+            },
+            },
+        },
+        },
+    });
+
+    if (!post) {
+        throw new NotFoundException('Publication introuvable');
+    }
+
+    return post;
+    }
 }
