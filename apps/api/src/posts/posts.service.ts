@@ -68,10 +68,14 @@ export class PostsService {
             status: true,
           },
         },
-        _count: {
-          select: {
-            comments: true,
-          },
+                _count: {
+        select: {
+            comments: {
+            where: {
+                deletedAt: null,
+            },
+            },
+        },
         },
       },
     });
@@ -99,10 +103,13 @@ export class PostsService {
           },
         },
         comments: {
-          orderBy: {
-            createdAt: 'asc',
-          },
-          select: {
+            where: {
+                deletedAt: null,
+            },
+            orderBy: {
+                createdAt: 'asc',
+            },
+            select: {
             id: true,
             content: true,
             createdAt: true,

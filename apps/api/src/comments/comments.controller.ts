@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { UserRole, UserStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateCommentDto } from './dto/create-comment.dto';
@@ -16,21 +25,30 @@ type RequestWithUser = {
 };
 
 @UseGuards(JwtAuthGuard)
-@Controller('posts/:postId/comments')
+@Controller()
 export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
 
-  @Get()
+  @Get('posts/:postId/comments')
   findByPost(@Param('postId') postId: string) {
     return this.commentsService.findByPost(postId);
   }
 
-  @Post()
+  @Post('posts/:postId/comments')
   create(
     @Param('postId') postId: string,
     @Req() req: RequestWithUser,
     @Body() createCommentDto: CreateCommentDto,
   ) {
-    return this.commentsService.create(postId, req.user.userId, createCommentDto);
+    return this.commentsService.create(
+      postId,
+      req.user.userId,
+      createCommentDto,
+    );
+  }
+
+  @Delete('comments/:id')
+  softDelete(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.commentsService.softDelete(id, req.user);
   }
 }

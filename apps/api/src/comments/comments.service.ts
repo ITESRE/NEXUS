@@ -1,12 +1,30 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { UserRole, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
+
+type CurrentUser = {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  status: UserStatus;
+};
 
 @Injectable()
 export class CommentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(postId: string, authorId: string, createCommentDto: CreateCommentDto) {
+  async create(
+    postId: string,
+    authorId: string,
+    createCommentDto: CreateCommentDto,
+  ) {
     const post = await this.prisma.post.findFirst({
       where: {
         id: postId,
@@ -65,6 +83,7 @@ export class CommentsService {
     return this.prisma.comment.findMany({
       where: {
         postId,
+        deletedAt: null,
       },
       orderBy: {
         createdAt: 'asc',
@@ -74,6 +93,63 @@ export class CommentsService {
         content: true,
         createdAt: true,
         updatedAt: true,
+        author: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            status: true,
+          },
+        },
+      },
+    });
+  }
+
+  async softDelete(id: string, currentUser: CurrentUser) {
+    const comment = await this.prisma.comment.findFirst({
+      where: {
+        id,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        authorId: true,
+        post: {
+          select: {
+            deletedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!comment || comment.post.deletedAt) {
+      throw new NotFoundException('Commentaire introuvable');
+    }
+
+    const isOwner = comment.authorId === currentUser.userId;
+
+    const canModerate =
+      currentUser.role === UserRole.MODERATOR ||
+      currentUser.role === UserRole.ADMIN ||
+      currentUser.role === UserRole.SUPER_ADMIN;
+
+    if (!isOwner && !canModerate) {
+      throw new ForbiddenException('Accès interdit');
+    }
+
+    return this.prisma.comment.update({
+      where: {
+        id: comment.id,
+      },
+      data: {
+        deletedAt: new Date(),
+      },
+      select: {
+        id: true,
+        content: true,
+        deletedAt: true,
         author: {
           select: {
             id: true,
