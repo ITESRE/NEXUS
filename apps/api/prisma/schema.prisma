@@ -24,6 +24,18 @@ enum UserStatus {
   PENDING
 }
 
+enum ModerationAction {
+  POST_DELETE
+  POST_RESTORE
+  COMMENT_DELETE
+  COMMENT_RESTORE
+}
+
+enum ModerationTargetType {
+  POST
+  COMMENT
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -35,6 +47,7 @@ model User {
 
   posts        Post[]
   comments     Comment[]
+  moderationLogs ModerationLog[]
 
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -65,4 +78,21 @@ model Comment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   deletedAt DateTime?
+}
+
+model ModerationLog {
+  id          String               @id @default(uuid())
+  action      ModerationAction
+  targetType  ModerationTargetType
+  targetId    String
+  moderatorId String
+  reason      String?
+
+  moderator   User                 @relation(fields: [moderatorId], references: [id])
+
+  createdAt   DateTime             @default(now())
+
+  @@index([moderatorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }
