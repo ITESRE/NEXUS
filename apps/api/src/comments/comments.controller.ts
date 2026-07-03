@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -12,6 +13,7 @@ import { UserRole, UserStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CommentsService } from './comments.service';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 type RequestWithUser = {
   user: {
@@ -51,4 +53,15 @@ export class CommentsController {
   softDelete(@Param('id') id: string, @Req() req: RequestWithUser) {
     return this.commentsService.softDelete(id, req.user);
   }
+
+@UseGuards(JwtAuthGuard)
+@Patch('comments/:id')
+update(
+  @Param('id') id: string,
+  @Body() updateCommentDto: UpdateCommentDto,
+  @Req() req: any,
+) {
+  return this.commentsService.update(id, updateCommentDto, req.user);
+}
+
 }

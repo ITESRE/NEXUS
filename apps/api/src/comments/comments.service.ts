@@ -6,6 +6,7 @@ import {
 import { UserRole, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 type CurrentUser = {
   userId: string;
@@ -163,4 +164,43 @@ export class CommentsService {
       },
     });
   }
+
+async update(id: string, updateCommentDto: UpdateCommentDto, currentUser: any) {
+  const comment = await this.prisma.comment.findFirst({
+    where: {
+      id,
+      deletedAt: null,
+    },
+  });
+
+  if (!comment) {
+    throw new NotFoundException('Commentaire introuvable');
+  }
+
+  if (comment.authorId !== currentUser.userId) {
+    throw new ForbiddenException('Vous ne pouvez modifier que vos propres commentaires');
+  }
+
+  return this.prisma.comment.update({
+    where: { id },
+    data: {
+      content: updateCommentDto.content,
+    },
+    include: {
+      author: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+}
+
 }
