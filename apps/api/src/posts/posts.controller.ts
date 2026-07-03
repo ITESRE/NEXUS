@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { UserRole, UserStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -29,11 +38,17 @@ export class PostsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.postsService.findOne(id);
-    }
+  }
 
   @UseGuards(JwtAuthGuard)
   @Post()
   create(@Req() req: RequestWithUser, @Body() createPostDto: CreatePostDto) {
     return this.postsService.create(req.user.userId, createPostDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id')
+  softDelete(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.postsService.softDelete(id, req.user);
   }
 }
