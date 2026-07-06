@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 function getJwtAccessSecret(): string {
   const secret = process.env.JWT_ACCESS_SECRET;
@@ -18,7 +19,7 @@ function getJwtAccessSecret(): string {
 
 @Module({
   imports: [
-    UsersModule,
+    UsersModule, PrismaModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: getJwtAccessSecret(),

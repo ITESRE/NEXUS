@@ -3,12 +3,15 @@ import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
+import { createHash, randomBytes } from 'crypto';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async login(loginDto: LoginDto) {
@@ -50,9 +53,22 @@ export class AuthService {
     };
 
     const accessToken = await this.jwtService.signAsync(payload, jwtOptions);
+    const refreshToken = this.generateRefreshToken();
+
+    const refreshTokenHash =
+      this.hashRefreshToken(refreshToken);
+
+    await this.prisma.refreshSession.create({
+      data: {
+        tokenHash: refreshTokenHash,
+        userId: user.id,
+        expiresAt: this.getRefreshTokenExpirationDate(),
+      },
+    });
 
     return {
       accessToken,
+      refreshToken,
       tokenType: 'Bearer',
       expiresIn,
       user: {
@@ -65,4 +81,33 @@ export class AuthService {
       },
     };
   }
+
+private generateRefreshToken(): string {
+  return randomBytes(64).toString('base64url');
+}
+
+private hashRefreshToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+private getRefreshTokenExpirationDate(): Date {
+  const ttlDays = Number(
+    process.env.REFRESH_TOKEN_TTL_DAYS ?? '30',
+  );
+
+  if (!Number.isInteger(ttlDays) || ttlDays <= 0) {
+    throw new Error(
+      'REFRESH_TOKEN_TTL_DAYS doit être un entier positif',
+    );
+  }
+
+  const expiresAt = new Date();
+
+  expiresAt.setUTCDate(
+    expiresAt.getUTCDate() + ttlDays,
+  );
+
+  return expiresAt;
+}
+
 }
