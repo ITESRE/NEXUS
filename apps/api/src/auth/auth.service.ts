@@ -5,6 +5,7 @@ import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserStatus } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -108,6 +109,118 @@ private getRefreshTokenExpirationDate(): Date {
   );
 
   return expiresAt;
+}
+
+async refresh(refreshToken: string) {
+  const tokenHash = this.hashRefreshToken(refreshToken);
+
+  const session = await this.prisma.refreshSession.findUnique({
+    where: {
+      tokenHash,
+    },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!session) {
+    throw new UnauthorizedException(
+      'Refresh token invalide ou expiré',
+    );
+  }
+
+  if (session.revokedAt) {
+    throw new UnauthorizedException(
+      'Refresh token invalide ou expiré',
+    );
+  }
+
+  if (session.expiresAt <= new Date()) {
+    throw new UnauthorizedException(
+      'Refresh token invalide ou expiré',
+    );
+  }
+
+  if (session.user.status !== UserStatus.ACTIVE) {
+    throw new UnauthorizedException(
+      'Refresh token invalide ou expiré',
+    );
+  }
+
+  const secret = process.env.JWT_ACCESS_SECRET;
+  const expiresIn =
+    process.env.JWT_ACCESS_EXPIRES_IN ?? '15m';
+
+  if (!secret) {
+    throw new Error(
+      'JWT_ACCESS_SECRET is not defined',
+    );
+  }
+
+  const payload = {
+    sub: session.user.id,
+    email: session.user.email,
+    role: session.user.role,
+  };
+
+  const jwtOptions: JwtSignOptions = {
+    secret,
+    expiresIn:
+      expiresIn as JwtSignOptions['expiresIn'],
+  };
+
+  const newAccessToken =
+    await this.jwtService.signAsync(
+      payload,
+      jwtOptions,
+    );
+
+  const newRefreshToken =
+    this.generateRefreshToken();
+
+  const newRefreshTokenHash =
+    this.hashRefreshToken(newRefreshToken);
+
+  const now = new Date();
+
+  await this.prisma.$transaction(async (tx) => {
+    const revokedSession =
+      await tx.refreshSession.updateMany({
+        where: {
+          id: session.id,
+          revokedAt: null,
+          expiresAt: {
+            gt: now,
+          },
+        },
+        data: {
+          revokedAt: now,
+          lastUsedAt: now,
+        },
+      });
+
+    if (revokedSession.count !== 1) {
+      throw new UnauthorizedException(
+        'Refresh token invalide ou expiré',
+      );
+    }
+
+    await tx.refreshSession.create({
+      data: {
+        tokenHash: newRefreshTokenHash,
+        userId: session.userId,
+        expiresAt:
+          this.getRefreshTokenExpirationDate(),
+      },
+    });
+  });
+
+  return {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+    tokenType: 'Bearer',
+    expiresIn,
+  };
 }
 
 }
