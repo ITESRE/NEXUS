@@ -55,9 +55,11 @@ export class AuthController {
   @Post('users/:userId/logout-all')
   logoutAllForUser(
   @Param('userId') userId: string,
+  @Req() req: any,
   ) {
   return this.authService.logoutAllForUser(
     userId,
+    req.user.userId,
   );
   }
 

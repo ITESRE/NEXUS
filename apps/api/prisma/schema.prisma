@@ -38,6 +38,10 @@ enum ModerationTargetType {
   COMMENT
 }
 
+enum SecurityAction {
+  USER_SESSIONS_REVOKED
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -51,6 +55,8 @@ model User {
   comments     Comment[]
   moderationLogs ModerationLog[]
   refreshSessions  RefreshSession[]
+  securityActionsPerformed SecurityAuditLog[] @relation("SecurityAuditActor")
+  securityActionsReceived  SecurityAuditLog[] @relation("SecurityAuditTarget")
 
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -116,4 +122,22 @@ model RefreshSession {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model SecurityAuditLog {
+  id           String         @id @default(uuid())
+  action       SecurityAction
+  actorId      String
+  targetUserId String
+  reason       String?
+
+  actor        User           @relation("SecurityAuditActor", fields: [actorId], references: [id])
+  targetUser   User           @relation("SecurityAuditTarget", fields: [targetUserId], references: [id])
+
+  createdAt    DateTime       @default(now())
+
+  @@index([actorId])
+  @@index([targetUserId])
+  @@index([action])
+  @@index([createdAt])
 }

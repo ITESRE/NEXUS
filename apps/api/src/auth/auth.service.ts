@@ -5,7 +5,7 @@ import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserStatus } from '@prisma/client';
+import { SecurityAction, UserStatus } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -263,7 +263,10 @@ async logoutAll(userId: string) {
   };
 }
 
-async logoutAllForUser(userId: string) {
+async logoutAllForUser(
+  userId: string,
+  actorId: string,
+) {
   const user = await this.prisma.user.findUnique({
     where: {
       id: userId,
@@ -279,7 +282,36 @@ async logoutAllForUser(userId: string) {
     );
   }
 
-  return this.logoutAll(userId);
+  const now = new Date();
+
+  return this.prisma.$transaction(async (tx) => {
+    const result =
+      await tx.refreshSession.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+          lastUsedAt: now,
+        },
+      });
+
+    await tx.securityAuditLog.create({
+      data: {
+        action:
+          SecurityAction.USER_SESSIONS_REVOKED,
+        actorId,
+        targetUserId: userId,
+      },
+    });
+
+    return {
+      message:
+        'Toutes les sessions du compte ont été déconnectées',
+      revokedSessions: result.count,
+    };
+  });
 }
 
 }
