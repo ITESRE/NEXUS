@@ -27,8 +27,10 @@ enum UserStatus {
 enum ModerationAction {
   POST_DELETE
   POST_RESTORE
+  POST_UPDATE
   COMMENT_DELETE
   COMMENT_RESTORE
+  COMMENT_UPDATE
 }
 
 enum ModerationTargetType {
