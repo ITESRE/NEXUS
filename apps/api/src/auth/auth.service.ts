@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { UsersService } from '../users/users.service';
@@ -241,6 +241,45 @@ async logout(refreshToken: string) {
   return {
     message: 'Déconnexion effectuée',
   };
+}
+
+async logoutAll(userId: string) {
+  const now = new Date();
+
+  const result = await this.prisma.refreshSession.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: now,
+      lastUsedAt: now,
+    },
+  });
+
+  return {
+    message: 'Toutes les sessions ont été déconnectées',
+    revokedSessions: result.count,
+  };
+}
+
+async logoutAllForUser(userId: string) {
+  const user = await this.prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!user) {
+    throw new NotFoundException(
+      'Utilisateur introuvable',
+    );
+  }
+
+  return this.logoutAll(userId);
 }
 
 }

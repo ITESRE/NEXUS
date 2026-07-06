@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RolesGuard } from './roles.guard';
+import { UserRole } from '@prisma/client';
+import { Roles } from './roles.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -34,6 +37,27 @@ export class AuthController {
   ) {
   return this.authService.logout(
     refreshTokenDto.refreshToken,
+  );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout-all')
+  logoutAll(
+  @Req() req: any,
+  ) {
+  return this.authService.logoutAll(
+    req.user.userId,
+  );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Post('users/:userId/logout-all')
+  logoutAllForUser(
+  @Param('userId') userId: string,
+  ) {
+  return this.authService.logoutAllForUser(
+    userId,
   );
   }
 
