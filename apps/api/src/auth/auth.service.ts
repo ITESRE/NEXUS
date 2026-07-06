@@ -223,4 +223,24 @@ async refresh(refreshToken: string) {
   };
 }
 
+async logout(refreshToken: string) {
+  const tokenHash = this.hashRefreshToken(refreshToken);
+  const now = new Date();
+
+  await this.prisma.refreshSession.updateMany({
+    where: {
+      tokenHash,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: now,
+      lastUsedAt: now,
+    },
+  });
+
+  return {
+    message: 'Déconnexion effectuée',
+  };
+}
+
 }

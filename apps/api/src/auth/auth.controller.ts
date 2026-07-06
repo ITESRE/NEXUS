@@ -27,4 +27,14 @@ export class AuthController {
     refreshTokenDto.refreshToken,
   );
   }
+
+  @Post('logout')
+  logout(
+  @Body() refreshTokenDto: RefreshTokenDto,
+  ) {
+  return this.authService.logout(
+    refreshTokenDto.refreshToken,
+  );
+  }
+
 }
