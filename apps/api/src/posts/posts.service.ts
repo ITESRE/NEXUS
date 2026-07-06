@@ -212,8 +212,15 @@ export class PostsService {
     throw new NotFoundException('Post introuvable');
   }
 
-  if (post.authorId !== currentUser.userId) {
-    throw new ForbiddenException('Vous ne pouvez modifier que vos propres posts');
+  const canUpdate =
+    post.authorId === currentUser.userId ||
+    currentUser.role === UserRole.ADMIN ||
+    currentUser.role === UserRole.SUPER_ADMIN;
+
+  if (!canUpdate) {
+    throw new ForbiddenException(
+      'Vous n’êtes pas autorisé à modifier ce post',
+    );
   }
 
   return this.prisma.post.update({

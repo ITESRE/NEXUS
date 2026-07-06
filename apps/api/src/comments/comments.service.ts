@@ -188,8 +188,15 @@ async update(id: string, updateCommentDto: UpdateCommentDto, currentUser: any) {
     throw new NotFoundException('Commentaire introuvable');
   }
 
-  if (comment.authorId !== currentUser.userId) {
-    throw new ForbiddenException('Vous ne pouvez modifier que vos propres commentaires');
+  const canUpdate =
+    comment.authorId === currentUser.userId ||
+    currentUser.role === UserRole.ADMIN ||
+    currentUser.role === UserRole.SUPER_ADMIN;
+
+  if (!canUpdate) {
+    throw new ForbiddenException(
+      'Vous n’êtes pas autorisé à modifier ce commentaire',
+    );
   }
 
   return this.prisma.comment.update({
