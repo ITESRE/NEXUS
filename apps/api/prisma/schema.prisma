@@ -50,6 +50,7 @@ model User {
   posts        Post[]
   comments     Comment[]
   moderationLogs ModerationLog[]
+  refreshSessions  RefreshSession[]
 
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -97,4 +98,22 @@ model ModerationLog {
   @@index([moderatorId])
   @@index([targetType, targetId])
   @@index([createdAt])
+}
+
+model RefreshSession {
+  id         String    @id @default(uuid())
+  tokenHash  String    @unique
+  userId     String
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
 }
