@@ -199,7 +199,13 @@ async update(id: string, updateCommentDto: UpdateCommentDto, currentUser: any) {
     );
   }
 
-  return this.prisma.comment.update({
+const isPrivilegedEdit =
+  comment.authorId !== currentUser.userId &&
+  (currentUser.role === UserRole.ADMIN ||
+    currentUser.role === UserRole.SUPER_ADMIN);
+
+return this.prisma.$transaction(async (tx) => {
+  const updatedComment = await tx.comment.update({
     where: { id },
     data: {
       content: updateCommentDto.content,
@@ -219,6 +225,20 @@ async update(id: string, updateCommentDto: UpdateCommentDto, currentUser: any) {
       },
     },
   });
+
+  if (isPrivilegedEdit) {
+    await tx.moderationLog.create({
+      data: {
+        action: ModerationAction.COMMENT_UPDATE,
+        targetType: ModerationTargetType.COMMENT,
+        targetId: id,
+        moderatorId: currentUser.userId,
+      },
+    });
+  }
+
+  return updatedComment;
+});
 }
 
 }

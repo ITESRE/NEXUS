@@ -223,7 +223,13 @@ export class PostsService {
     );
   }
 
-  return this.prisma.post.update({
+const isPrivilegedEdit =
+  post.authorId !== currentUser.userId &&
+  (currentUser.role === UserRole.ADMIN ||
+    currentUser.role === UserRole.SUPER_ADMIN);
+
+return this.prisma.$transaction(async (tx) => {
+  const updatedPost = await tx.post.update({
     where: { id },
     data: {
       content: updatePostDto.content,
@@ -243,6 +249,20 @@ export class PostsService {
       },
     },
   });
+
+  if (isPrivilegedEdit) {
+    await tx.moderationLog.create({
+      data: {
+        action: ModerationAction.POST_UPDATE,
+        targetType: ModerationTargetType.POST,
+        targetId: id,
+        moderatorId: currentUser.userId,
+      },
+    });
+  }
+
+  return updatedPost;
+});
 }
 
 }
