@@ -34,4 +34,10 @@ export class ModerationController {
     return this.moderationService.restoreComment(id, req.user);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Get('logs')
+  findLogs() {
+    return this.moderationService.findLogs();
+  }
+
 }

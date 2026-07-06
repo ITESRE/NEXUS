@@ -176,4 +176,25 @@ async restoreComment(id: string, currentUser: any) {
   });
 }
 
+findLogs() {
+  return this.prisma.moderationLog.findMany({
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: 100,
+    include: {
+      moderator: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          status: true,
+        },
+      },
+    },
+  });
+}
+
 }
