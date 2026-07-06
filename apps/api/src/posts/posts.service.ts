@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UserRole, UserStatus } from '@prisma/client';
+import { ModerationAction, ModerationTargetType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -164,29 +165,39 @@ export class PostsService {
       throw new ForbiddenException('Accès interdit');
     }
 
-    return this.prisma.post.update({
-      where: {
-        id: post.id,
-      },
-      data: {
-        deletedAt: new Date(),
-      },
-      select: {
-        id: true,
-        content: true,
-        deletedAt: true,
-        author: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            status: true,
+      return this.prisma.$transaction(async (tx) => {
+        const deletedPost = await tx.post.update({
+          where: { id },
+          data: {
+            deletedAt: new Date(),
           },
-        },
-      },
-    });
+          include: {
+            author: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+          },
+        });
+
+        await tx.moderationLog.create({
+          data: {
+            action: ModerationAction.POST_DELETE,
+            targetType: ModerationTargetType.POST,
+            targetId: id,
+            moderatorId: currentUser.userId,
+          },
+        });
+
+        return deletedPost;
+      });
   }
 
   async update(id: string, updatePostDto: UpdatePostDto, currentUser: any) {

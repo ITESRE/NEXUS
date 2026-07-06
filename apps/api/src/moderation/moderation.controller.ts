@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -22,16 +22,16 @@ export class ModerationController {
     return this.moderationService.findDeletedComments();
   }
 
-    @Roles(UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Patch('posts/:id/restore')
-  restorePost(@Param('id') id: string) {
-    return this.moderationService.restorePost(id);
+  restorePost(@Param('id') id: string, @Req() req: any) {
+    return this.moderationService.restorePost(id, req.user);
   }
 
   @Roles(UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Patch('comments/:id/restore')
-  restoreComment(@Param('id') id: string) {
-    return this.moderationService.restoreComment(id);
+  restoreComment(@Param('id') id: string, @Req() req: any) {
+    return this.moderationService.restoreComment(id, req.user);
   }
 
 }

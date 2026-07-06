@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UserRole, UserStatus } from '@prisma/client';
+import { ModerationAction, ModerationTargetType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
@@ -140,28 +141,38 @@ export class CommentsService {
       throw new ForbiddenException('Accès interdit');
     }
 
-    return this.prisma.comment.update({
-      where: {
-        id: comment.id,
-      },
-      data: {
-        deletedAt: new Date(),
-      },
-      select: {
-        id: true,
-        content: true,
-        deletedAt: true,
-        author: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            status: true,
+    return this.prisma.$transaction(async (tx) => {
+      const deletedComment = await tx.comment.update({
+        where: { id },
+        data: {
+          deletedAt: new Date(),
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+            },
           },
         },
-      },
+      });
+
+      await tx.moderationLog.create({
+        data: {
+          action: ModerationAction.COMMENT_DELETE,
+          targetType: ModerationTargetType.COMMENT,
+          targetId: id,
+          moderatorId: currentUser.userId,
+        },
+      });
+
+      return deletedComment;
     });
   }
 
