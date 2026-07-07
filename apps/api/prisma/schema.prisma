@@ -40,6 +40,7 @@ enum ModerationTargetType {
 
 enum SecurityAction {
   USER_SESSIONS_REVOKED
+  USER_STATUS_CHANGED
 }
 
 model User {
@@ -130,6 +131,9 @@ model SecurityAuditLog {
   actorId      String
   targetUserId String
   reason       String?
+
+  previousStatus UserStatus?
+  newStatus      UserStatus?
 
   actor        User           @relation("SecurityAuditActor", fields: [actorId], references: [id])
   targetUser   User           @relation("SecurityAuditTarget", fields: [targetUserId], references: [id])
