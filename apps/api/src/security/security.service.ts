@@ -17,6 +17,8 @@ export class SecurityService {
         id: true,
         action: true,
         reason: true,
+        previousStatus: true,
+        newStatus: true,
         createdAt: true,
 
         actor: {
