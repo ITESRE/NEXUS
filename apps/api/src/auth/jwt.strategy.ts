@@ -5,9 +5,10 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UsersService } from '../users/users.service';
 
 type JwtPayload = {
-  sub?: string;
-  email?: string;
-  role?: UserRole;
+  sub: string;
+  email: string;
+  role: UserRole;
+  authVersion: number;
 };
 
 function getJwtAccessSecret(): string {
@@ -35,6 +36,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token invalide');
     }
 
+    if (!Number.isInteger(payload.authVersion)) {
+      throw new UnauthorizedException();
+    }
+
     const user = await this.usersService.findByIdForAuth(payload.sub);
 
     if (!user) {
@@ -43,6 +48,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Compte désactivé');
+    }
+
+    if (user.authVersion !== payload.authVersion) {
+      throw new UnauthorizedException();
     }
 
     return {

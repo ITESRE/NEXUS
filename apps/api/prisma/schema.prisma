@@ -52,6 +52,7 @@ model User {
   lastName     String
   role         UserRole   @default(USER)
   status       UserStatus @default(ACTIVE)
+  authVersion  Int        @default(0)
 
   posts        Post[]
   comments     Comment[]

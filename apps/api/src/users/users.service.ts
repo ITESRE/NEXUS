@@ -76,7 +76,10 @@ export class UsersService {
   async findByIdForAuth(id: string) {
   return this.prisma.user.findUnique({
     where: { id },
-    select: this.safeUserSelect,
+    select: {
+      ...this.safeUserSelect,
+      authVersion: true,
+    },
   });
   }
 

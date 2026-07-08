@@ -36,9 +36,10 @@ export class AuthService {
     }
 
     const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+    authVersion: user.authVersion,
     };
 
     const secret = process.env.JWT_ACCESS_SECRET;
@@ -161,6 +162,7 @@ async refresh(refreshToken: string) {
     sub: session.user.id,
     email: session.user.email,
     role: session.user.role,
+    authVersion: session.user.authVersion,
   };
 
   const jwtOptions: JwtSignOptions = {
