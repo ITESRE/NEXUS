@@ -248,56 +248,79 @@ async logout(refreshToken: string) {
 async logoutAll(userId: string) {
   const now = new Date();
 
-  const result = await this.prisma.refreshSession.updateMany({
-    where: {
-      userId,
-      revokedAt: null,
-    },
-    data: {
-      revokedAt: now,
-      lastUsedAt: now,
-    },
-  });
+  return this.prisma.$transaction(async (tx) => {
+    const result = await tx.refreshSession.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: now,
+        lastUsedAt: now,
+      },
+    });
 
-  return {
-    message: 'Toutes les sessions ont été déconnectées',
-    revokedSessions: result.count,
-  };
+    await tx.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        authVersion: {
+          increment: 1,
+        },
+      },
+    });
+
+    return {
+      message: 'Toutes les sessions ont été déconnectées',
+      revokedSessions: result.count,
+    };
+  });
 }
 
 async logoutAllForUser(
   userId: string,
   actorId: string,
 ) {
-  const user = await this.prisma.user.findUnique({
-    where: {
-      id: userId,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  if (!user) {
-    throw new NotFoundException(
-      'Utilisateur introuvable',
-    );
-  }
-
   const now = new Date();
 
   return this.prisma.$transaction(async (tx) => {
-    const result =
-      await tx.refreshSession.updateMany({
-        where: {
-          userId,
-          revokedAt: null,
+    const user = await tx.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        'Utilisateur introuvable',
+      );
+    }
+
+    const result = await tx.refreshSession.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: now,
+        lastUsedAt: now,
+      },
+    });
+
+    await tx.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        authVersion: {
+          increment: 1,
         },
-        data: {
-          revokedAt: now,
-          lastUsedAt: now,
-        },
-      });
+      },
+    });
 
     await tx.securityAuditLog.create({
       data: {
