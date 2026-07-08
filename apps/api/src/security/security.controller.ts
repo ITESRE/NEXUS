@@ -5,6 +5,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { SecurityService } from './security.service';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 
 type RequestWithUser = {
@@ -48,4 +49,23 @@ export class SecurityController {
     updateUserStatusDto,
   );
 }
+
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.SUPER_ADMIN,
+  )
+  @Patch('users/:userId/role')
+  updateUserRole(
+    @Param('userId') userId: string,
+    @Body()
+    updateUserRoleDto: UpdateUserRoleDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.securityService.updateUserRole(
+      userId,
+      req.user,
+      updateUserRoleDto,
+    );
+  }
+
 }
