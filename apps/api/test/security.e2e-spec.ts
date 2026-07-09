@@ -285,6 +285,226 @@ describe('Securite administrative (e2e)', () => {
       );
   });
 
+  it('invalide les sessions lors d une desactivation et ne reactive pas les anciens tokens', async () => {
+  const userLogin =
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: USER_EMAIL,
+        password: USER_PASSWORD,
+      });
+
+  expect([200, 201]).toContain(
+    userLogin.status,
+  );
+
+  const oldUserAccessToken: string =
+    userLogin.body.accessToken;
+
+  const oldUserRefreshToken: string =
+    userLogin.body.refreshToken;
+
+  const adminLogin =
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+      });
+
+  expect([200, 201]).toContain(
+    adminLogin.status,
+  );
+
+  const adminAccessToken: string =
+    adminLogin.body.accessToken;
+
+  const userBefore =
+    await prisma.user.findUniqueOrThrow({
+      where: {
+        id: userId,
+      },
+      select: {
+        status: true,
+        authVersion: true,
+      },
+    });
+
+  expect(userBefore.status)
+    .toBe('ACTIVE');
+
+  await request(app.getHttpServer())
+    .get('/api/auth/me')
+    .set(
+      'Authorization',
+      `Bearer ${oldUserAccessToken}`,
+    )
+    .expect(200);
+
+  const disableResponse =
+    await request(app.getHttpServer())
+      .patch(
+        `/api/security/users/${userId}/status`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${adminAccessToken}`,
+      )
+      .send({
+        status: 'DISABLED',
+        reason:
+          'Test e2e de desactivation du compte',
+      });
+
+  expect(disableResponse.status)
+    .toBe(200);
+
+  expect(disableResponse.body.user.status)
+    .toBe('DISABLED');
+
+  await request(app.getHttpServer())
+    .get('/api/auth/me')
+    .set(
+      'Authorization',
+      `Bearer ${oldUserAccessToken}`,
+    )
+    .expect(401);
+
+  await request(app.getHttpServer())
+    .post('/api/auth/refresh')
+    .send({
+      refreshToken:
+        oldUserRefreshToken,
+    })
+    .expect(401);
+
+  const disabledUser =
+    await prisma.user.findUniqueOrThrow({
+      where: {
+        id: userId,
+      },
+      select: {
+        status: true,
+        authVersion: true,
+      },
+    });
+
+  expect(disabledUser.status)
+    .toBe('DISABLED');
+
+  expect(disabledUser.authVersion)
+    .toBe(
+      userBefore.authVersion + 1,
+    );
+
+  const reactivateResponse =
+    await request(app.getHttpServer())
+      .patch(
+        `/api/security/users/${userId}/status`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${adminAccessToken}`,
+      )
+      .send({
+        status: 'ACTIVE',
+      });
+
+  expect(reactivateResponse.status)
+    .toBe(200);
+
+  expect(reactivateResponse.body.user.status)
+    .toBe('ACTIVE');
+
+  await request(app.getHttpServer())
+    .get('/api/auth/me')
+    .set(
+      'Authorization',
+      `Bearer ${oldUserAccessToken}`,
+    )
+    .expect(401);
+
+  const reactivatedUser =
+    await prisma.user.findUniqueOrThrow({
+      where: {
+        id: userId,
+      },
+      select: {
+        status: true,
+        authVersion: true,
+      },
+    });
+
+  expect(reactivatedUser.status)
+    .toBe('ACTIVE');
+
+  expect(reactivatedUser.authVersion)
+    .toBe(
+      userBefore.authVersion + 2,
+    );
+
+  const freshLogin =
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: USER_EMAIL,
+        password: USER_PASSWORD,
+      });
+
+  expect([200, 201]).toContain(
+    freshLogin.status,
+  );
+
+  expect(
+    freshLogin.body.accessToken,
+  ).toBeDefined();
+
+  expect(
+    freshLogin.body.user.status,
+  ).toBe('ACTIVE');
+
+  const disableAudit =
+    await prisma.securityAuditLog.findFirst({
+      where: {
+        action:
+          'USER_STATUS_CHANGED',
+        actorId: adminId,
+        targetUserId: userId,
+        previousStatus: 'ACTIVE',
+        newStatus: 'DISABLED',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  expect(disableAudit)
+    .not.toBeNull();
+
+  expect(disableAudit?.reason)
+    .toBe(
+      'Test e2e de desactivation du compte',
+    );
+
+  const reactivateAudit =
+    await prisma.securityAuditLog.findFirst({
+      where: {
+        action:
+          'USER_STATUS_CHANGED',
+        actorId: adminId,
+        targetUserId: userId,
+        previousStatus: 'DISABLED',
+        newStatus: 'ACTIVE',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  expect(reactivateAudit)
+    .not.toBeNull();
+});
+
   afterAll(async () => {
     await prisma.securityAuditLog.deleteMany({
       where: {
