@@ -6,12 +6,19 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RolesGuard } from './roles.guard';
 import { UserRole } from '@prisma/client';
 import { Roles } from './roles.decorator';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
+  @Throttle({
+  default: {
+    limit: 10,
+    ttl: 60_000,
+  },
+  })
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
@@ -23,6 +30,12 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Throttle({
+  default: {
+    limit: 20,
+    ttl: 60_000,
+  },
+  })
   refresh(
   @Body() refreshTokenDto: RefreshTokenDto,
   ) {

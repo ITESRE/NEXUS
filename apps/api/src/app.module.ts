@@ -9,10 +9,22 @@ import { CommentsModule } from './comments/comments.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { ProfileModule } from './profile/profile.module';
 import { SecurityModule } from './security/security.module';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule, } from '@nestjs/throttler';
 
 @Module({
-  imports: [PrismaModule, UsersModule, AuthModule, PostsModule, CommentsModule, ModerationModule, ProfileModule, SecurityModule,],
+  imports: [ ThrottlerModule.forRoot({
+  throttlers: [
+    {
+      ttl: 60_000,
+      limit: 120,
+    },
+  ],
+}), PrismaModule, UsersModule, AuthModule, PostsModule, CommentsModule, ModerationModule, ProfileModule, SecurityModule,],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [ {
+  provide: APP_GUARD,
+  useClass: ThrottlerGuard,
+}, AppService],
 })
 export class AppModule {}
