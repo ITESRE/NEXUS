@@ -121,6 +121,9 @@ export class SecurityService {
       },
       data: {
         status: updateUserStatusDto.status,
+        authVersion: {
+          increment: 1,
+        },
       },
       select: {
         id: true,
@@ -276,6 +279,9 @@ async updateUserRole(
         },
         data: {
           role: updateUserRoleDto.role,
+          authVersion: {
+            increment: 1,
+          },
         },
       });
 
