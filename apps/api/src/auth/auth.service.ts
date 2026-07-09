@@ -6,6 +6,7 @@ import { LoginDto } from './dto/login.dto';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecurityAction, UserStatus } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +14,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
   ) {}
 
   async login(loginDto: LoginDto) {
@@ -42,8 +44,14 @@ export class AuthService {
     authVersion: user.authVersion,
     };
 
-    const secret = process.env.JWT_ACCESS_SECRET;
-    const expiresIn = process.env.JWT_ACCESS_EXPIRES_IN ?? '15m';
+    const secret =
+      this.configService.getOrThrow<string>(
+        'JWT_ACCESS_SECRET',
+      );
+    const expiresIn =
+      this.configService.getOrThrow<string>(
+        'JWT_ACCESS_EXPIRES_IN',
+      );
 
     if (!secret) {
     throw new Error('JWT_ACCESS_SECRET is not defined');
@@ -93,9 +101,10 @@ private hashRefreshToken(token: string): string {
 }
 
 private getRefreshTokenExpirationDate(): Date {
-  const ttlDays = Number(
-    process.env.REFRESH_TOKEN_TTL_DAYS ?? '30',
-  );
+  const ttlDays =
+    this.configService.getOrThrow<number>(
+      'REFRESH_TOKEN_TTL_DAYS',
+    );
 
   if (!Number.isInteger(ttlDays) || ttlDays <= 0) {
     throw new Error(
@@ -148,9 +157,14 @@ async refresh(refreshToken: string) {
     );
   }
 
-  const secret = process.env.JWT_ACCESS_SECRET;
+  const secret =
+    this.configService.getOrThrow<string>(
+      'JWT_ACCESS_SECRET',
+    );
   const expiresIn =
-    process.env.JWT_ACCESS_EXPIRES_IN ?? '15m';
+    this.configService.getOrThrow<string>(
+      'JWT_ACCESS_EXPIRES_IN',
+    );
 
   if (!secret) {
     throw new Error(

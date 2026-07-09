@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { UserRole, UserStatus } from '@prisma/client';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UsersService } from '../users/users.service';
+import { ConfigService } from '@nestjs/config';
 
 type JwtPayload = {
   sub: string;
@@ -11,23 +12,20 @@ type JwtPayload = {
   authVersion: number;
 };
 
-function getJwtAccessSecret(): string {
-  const secret = process.env.JWT_ACCESS_SECRET;
-
-  if (!secret) {
-    throw new Error('JWT_ACCESS_SECRET manquant dans le fichier .env');
-  }
-
-  return secret;
-}
-
-@Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private readonly usersService: UsersService) {
+  @Injectable()
+  export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor(
+    private readonly usersService: UsersService,
+    configService: ConfigService,
+  ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest:
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: getJwtAccessSecret(),
+      secretOrKey:
+        configService.getOrThrow<string>(
+          'JWT_ACCESS_SECRET',
+        ),
     });
   }
 

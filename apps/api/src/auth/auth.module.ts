@@ -6,26 +6,22 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { PrismaModule } from '../prisma/prisma.module';
-
-function getJwtAccessSecret(): string {
-  const secret = process.env.JWT_ACCESS_SECRET;
-
-  if (!secret) {
-    throw new Error('JWT_ACCESS_SECRET manquant dans le fichier .env');
-  }
-
-  return secret;
-}
+import { ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
     UsersModule, PrismaModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.register({
-      secret: getJwtAccessSecret(),
-      signOptions: {
-        expiresIn: '1h',
-      },
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (
+        configService: ConfigService,
+      ) => ({
+        secret:
+          configService.getOrThrow<string>(
+            'JWT_ACCESS_SECRET',
+          ),
+      }),
     }),
   ],
   controllers: [AuthController],
