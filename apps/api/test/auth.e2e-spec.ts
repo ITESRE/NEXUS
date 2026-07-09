@@ -17,10 +17,21 @@ import { App } from 'supertest/types';
 
 import { AppModule } from '../src/app.module';
 import { setupApp } from '../src/app.setup';
+import * as argon2 from 'argon2';
+
+import { PrismaService } from '../src/prisma/prisma.service';
+
+
+const TEST_EMAIL =
+  'e2e-user@nexus.local';
+
+const TEST_PASSWORD =
+  'E2ePassword123!';
 
 describe('Authentification (e2e)', () => {
   let app: INestApplication<App>;
   let accessToken: string;
+  let prisma: PrismaService;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule =
@@ -34,17 +45,47 @@ describe('Authentification (e2e)', () => {
     setupApp(app);
 
     await app.init();
+    prisma = app.get(PrismaService);
+
+await prisma.user.deleteMany({
+  where: {
+    email: TEST_EMAIL,
+  },
+});
+
+const passwordHash =
+  await argon2.hash(TEST_PASSWORD, {
+    type: argon2.argon2id,
+    memoryCost: 19456,
+    timeCost: 2,
+    parallelism: 1,
   });
 
-  afterAll(async () => {
-    await app.close();
+await prisma.user.create({
+  data: {
+    email: TEST_EMAIL,
+    passwordHash,
+    firstName: 'E2E',
+    lastName: 'User',
+  },
+});
   });
+
+afterAll(async () => {
+  await prisma.user.deleteMany({
+    where: {
+      email: TEST_EMAIL,
+    },
+  });
+
+  await app.close();
+});
 
   it('refuse un mauvais mot de passe', async () => {
     await request(app.getHttpServer())
       .post('/api/auth/login')
       .send({
-        email: 'user@nexus.local',
+        email: TEST_EMAIL,
         password: 'MauvaisMotDePasse123!',
       })
       .expect(401);
@@ -55,8 +96,8 @@ describe('Authentification (e2e)', () => {
       await request(app.getHttpServer())
         .post('/api/auth/login')
         .send({
-          email: 'user@nexus.local',
-          password: 'Password123!',
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
         });
 
     expect([200, 201]).toContain(
@@ -70,7 +111,7 @@ describe('Authentification (e2e)', () => {
       .toBeDefined();
 
     expect(response.body.user.email)
-      .toBe('user@nexus.local');
+      .toBe(TEST_EMAIL);
 
     accessToken =
       response.body.accessToken;
@@ -87,7 +128,7 @@ describe('Authentification (e2e)', () => {
         .expect(200);
 
     expect(response.body.email)
-      .toBe('user@nexus.local');
+      .toBe(TEST_EMAIL);
 
     expect(response.body.role)
       .toBe('USER');
@@ -104,8 +145,8 @@ describe('Authentification (e2e)', () => {
     await request(app.getHttpServer())
       .post('/api/auth/login')
       .send({
-        email: 'user@nexus.local',
-        password: 'Password123!',
+        email: TEST_EMAIL,
+        password: TEST_PASSWORD,
       });
 
   expect([200, 201]).toContain(
