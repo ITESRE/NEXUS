@@ -11,9 +11,31 @@ import { ProfileModule } from './profile/profile.module';
 import { SecurityModule } from './security/security.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule, } from '@nestjs/throttler';
+import { ConfigModule } from '@nestjs/config';
+import * as Joi from 'joi';
 
 @Module({
-  imports: [ ThrottlerModule.forRoot({
+  imports: [ ConfigModule.forRoot({
+  isGlobal: true,
+  validationSchema: Joi.object({
+    DATABASE_URL: Joi.string()
+      .pattern(/^postgresql:\/\/.+/)
+      .required(),
+
+    JWT_ACCESS_SECRET: Joi.string()
+      .min(32)
+      .required(),
+
+    JWT_ACCESS_EXPIRES_IN: Joi.string()
+      .required(),
+
+    REFRESH_TOKEN_TTL_DAYS: Joi.number()
+      .integer()
+      .positive()
+      .required(),
+  }),
+}),
+  ThrottlerModule.forRoot({
   throttlers: [
     {
       ttl: 60_000,
