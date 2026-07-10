@@ -2,9 +2,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import * as argon2 from 'argon2';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class ProfileService {
@@ -77,4 +80,99 @@ export class ProfileService {
       },
     });
   }
+
+  async changePassword(
+  userId: string,
+  changePasswordDto: ChangePasswordDto,
+) {
+  const user = await this.prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      id: true,
+      passwordHash: true,
+    },
+  });
+
+  if (!user) {
+    throw new NotFoundException(
+      'Utilisateur introuvable',
+    );
+  }
+
+  const isCurrentPasswordValid =
+    await argon2.verify(
+      user.passwordHash,
+      changePasswordDto.currentPassword,
+    );
+
+  if (!isCurrentPasswordValid) {
+    throw new UnauthorizedException(
+      'Mot de passe actuel incorrect',
+    );
+  }
+
+  const isSamePassword =
+    await argon2.verify(
+      user.passwordHash,
+      changePasswordDto.newPassword,
+    );
+
+  if (isSamePassword) {
+    throw new BadRequestException(
+      'Le nouveau mot de passe doit être différent de l ancien',
+    );
+  }
+
+  const newPasswordHash =
+    await argon2.hash(
+      changePasswordDto.newPassword,
+      {
+        type: argon2.argon2id,
+        memoryCost: 19456,
+        timeCost: 2,
+        parallelism: 1,
+      },
+    );
+
+  const now = new Date();
+
+  return this.prisma.$transaction(
+    async (tx) => {
+      await tx.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          passwordHash: newPasswordHash,
+          authVersion: {
+            increment: 1,
+          },
+        },
+      });
+
+      const revokedSessions =
+        await tx.refreshSession.updateMany({
+          where: {
+            userId,
+            revokedAt: null,
+          },
+          data: {
+            revokedAt: now,
+            lastUsedAt: now,
+          },
+        });
+
+      return {
+        message:
+          'Mot de passe modifié avec succès',
+        revokedSessions:
+          revokedSessions.count,
+      };
+    },
+  );
+}
+
+
 }

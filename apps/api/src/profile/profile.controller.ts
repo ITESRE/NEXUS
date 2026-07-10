@@ -9,6 +9,8 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileService } from './profile.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
+
 
 type RequestWithUser = {
   user: {
@@ -36,4 +38,16 @@ export class ProfileController {
       updateProfileDto,
     );
   }
+
+  @Patch('me/password')
+  changePassword(
+    @Req() req: RequestWithUser,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return this.profileService.changePassword(
+      req.user.userId,
+      changePasswordDto,
+    );
+  }
+
 }
