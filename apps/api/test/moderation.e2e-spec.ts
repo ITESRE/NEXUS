@@ -473,6 +473,243 @@ describe('Moderation (e2e)', () => {
     .not.toBeNull();
 });
 
+it('gere le cycle complet de suppression et restauration d un commentaire', async () => {
+  const postResponse =
+    await request(app.getHttpServer())
+      .post('/api/posts')
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .send({
+        content:
+          'Post e2e pour test de moderation commentaire',
+      });
+
+  expect([200, 201]).toContain(
+    postResponse.status,
+  );
+
+  const postId: string =
+    postResponse.body.id;
+
+  const commentContent =
+    'Commentaire e2e pour test de moderation';
+
+  const commentResponse =
+    await request(app.getHttpServer())
+      .post(
+        `/api/posts/${postId}/comments`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .send({
+        content: commentContent,
+      });
+
+  expect([200, 201]).toContain(
+    commentResponse.status,
+  );
+
+  const commentId: string =
+    commentResponse.body.id;
+
+  expect(commentId)
+    .toBeDefined();
+
+  // Vérifier présence avant suppression
+
+  const commentsBefore =
+    await request(app.getHttpServer())
+      .get(
+        `/api/posts/${postId}/comments`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .expect(200);
+
+  expect(
+    commentsBefore.body.some(
+      (comment: { id: string }) =>
+        comment.id === commentId,
+    ),
+  ).toBe(true);
+
+  // MODERATOR supprime le commentaire
+
+  const deleteResponse =
+    await request(app.getHttpServer())
+      .delete(
+        `/api/comments/${commentId}`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${moderatorAccessToken}`,
+      );
+
+  expect([200, 204]).toContain(
+    deleteResponse.status,
+  );
+
+  // Absent de la liste des commentaires
+
+  const commentsAfterDelete =
+    await request(app.getHttpServer())
+      .get(
+        `/api/posts/${postId}/comments`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .expect(200);
+
+  expect(
+    commentsAfterDelete.body.some(
+      (comment: { id: string }) =>
+        comment.id === commentId,
+    ),
+  ).toBe(false);
+
+  // Absent aussi du détail du post
+
+  const postDetailAfterDelete =
+    await request(app.getHttpServer())
+      .get(`/api/posts/${postId}`)
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .expect(200);
+
+  expect(
+    postDetailAfterDelete.body.comments.some(
+      (comment: { id: string }) =>
+        comment.id === commentId,
+    ),
+  ).toBe(false);
+
+  // Visible côté modération
+
+  const deletedCommentsResponse =
+    await request(app.getHttpServer())
+      .get(
+        '/api/moderation/comments/deleted',
+      )
+      .set(
+        'Authorization',
+        `Bearer ${moderatorAccessToken}`,
+      )
+      .expect(200);
+
+  const deletedComments =
+    Array.isArray(
+      deletedCommentsResponse.body,
+    )
+      ? deletedCommentsResponse.body
+      : deletedCommentsResponse.body.comments;
+
+  expect(
+    deletedComments.some(
+      (comment: { id: string }) =>
+        comment.id === commentId,
+    ),
+  ).toBe(true);
+
+  // Audit COMMENT_DELETE
+
+  const deleteLog =
+    await prisma.moderationLog.findFirst({
+      where: {
+        action: 'COMMENT_DELETE',
+        targetType: 'COMMENT',
+        targetId: commentId,
+        moderatorId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  expect(deleteLog)
+    .not.toBeNull();
+
+  // Restaurer le commentaire
+
+  const restoreResponse =
+    await request(app.getHttpServer())
+      .patch(
+        `/api/moderation/comments/${commentId}/restore`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${moderatorAccessToken}`,
+      );
+
+  expect(restoreResponse.status)
+    .toBe(200);
+
+  // Réapparition dans la liste
+
+  const commentsAfterRestore =
+    await request(app.getHttpServer())
+      .get(
+        `/api/posts/${postId}/comments`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .expect(200);
+
+  expect(
+    commentsAfterRestore.body.some(
+      (comment: { id: string }) =>
+        comment.id === commentId,
+    ),
+  ).toBe(true);
+
+  // Réapparition dans le détail du post
+
+  const postDetailAfterRestore =
+    await request(app.getHttpServer())
+      .get(`/api/posts/${postId}`)
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .expect(200);
+
+  expect(
+    postDetailAfterRestore.body.comments.some(
+      (comment: { id: string }) =>
+        comment.id === commentId,
+    ),
+  ).toBe(true);
+
+  // Audit COMMENT_RESTORE
+
+  const restoreLog =
+    await prisma.moderationLog.findFirst({
+      where: {
+        action: 'COMMENT_RESTORE',
+        targetType: 'COMMENT',
+        targetId: commentId,
+        moderatorId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  expect(restoreLog)
+    .not.toBeNull();
+});
+
   afterAll(async () => {
     await prisma.moderationLog.deleteMany({
       where: {
