@@ -297,6 +297,182 @@ describe('Moderation (e2e)', () => {
       .expect(200);
   });
 
+  it('gere le cycle complet de suppression et restauration d un post', async () => {
+  const postContent =
+    'Post e2e pour test de moderation';
+
+  // 1. USER crée un post
+
+  const createResponse =
+    await request(app.getHttpServer())
+      .post('/api/posts')
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .send({
+        content: postContent,
+      });
+
+  expect([200, 201]).toContain(
+    createResponse.status,
+  );
+
+  const postId: string =
+    createResponse.body.id;
+
+  expect(postId)
+    .toBeDefined();
+
+  // 2. Vérifier que le post est accessible
+
+  await request(app.getHttpServer())
+    .get(`/api/posts/${postId}`)
+    .set(
+      'Authorization',
+      `Bearer ${userAccessToken}`,
+    )
+    .expect(200);
+
+  // 3. MODERATOR supprime le post
+
+  const deleteResponse =
+    await request(app.getHttpServer())
+      .delete(`/api/posts/${postId}`)
+      .set(
+        'Authorization',
+        `Bearer ${moderatorAccessToken}`,
+      );
+
+  expect([200, 204]).toContain(
+    deleteResponse.status,
+  );
+
+  // 4. Le détail du post doit maintenant retourner 404
+
+  await request(app.getHttpServer())
+    .get(`/api/posts/${postId}`)
+    .set(
+      'Authorization',
+      `Bearer ${userAccessToken}`,
+    )
+    .expect(404);
+
+  // 5. Le post doit apparaître dans la liste des supprimés
+
+  const deletedPostsResponse =
+    await request(app.getHttpServer())
+      .get('/api/moderation/posts/deleted')
+      .set(
+        'Authorization',
+        `Bearer ${moderatorAccessToken}`,
+      )
+      .expect(200);
+
+  const deletedPosts =
+    Array.isArray(deletedPostsResponse.body)
+      ? deletedPostsResponse.body
+      : deletedPostsResponse.body.posts;
+
+  expect(
+    deletedPosts.some(
+      (post: { id: string }) =>
+        post.id === postId,
+    ),
+  ).toBe(true);
+
+  // 6. Vérifier le log POST_DELETE
+
+  const deleteLog =
+    await prisma.moderationLog.findFirst({
+      where: {
+        action: 'POST_DELETE',
+        targetType: 'POST',
+        targetId: postId,
+        moderatorId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  expect(deleteLog)
+    .not.toBeNull();
+
+  // 7. MODERATOR restaure le post
+
+  const restoreResponse =
+    await request(app.getHttpServer())
+      .patch(
+        `/api/moderation/posts/${postId}/restore`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${moderatorAccessToken}`,
+      );
+
+  expect(restoreResponse.status)
+    .toBe(200);
+
+  // 8. Le post doit être de nouveau accessible
+
+  const restoredPostResponse =
+    await request(app.getHttpServer())
+      .get(`/api/posts/${postId}`)
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .expect(200);
+
+  expect(restoredPostResponse.body.id)
+    .toBe(postId);
+
+  expect(restoredPostResponse.body.content)
+    .toBe(postContent);
+
+  // 9. Le post doit réapparaître dans le feed
+
+  const feedResponse =
+    await request(app.getHttpServer())
+      .get('/api/posts')
+      .set(
+        'Authorization',
+        `Bearer ${userAccessToken}`,
+      )
+      .expect(200);
+
+  const feedPosts =
+    Array.isArray(feedResponse.body)
+      ? feedResponse.body
+      : feedResponse.body.posts;
+
+  expect(
+    feedPosts.some(
+      (post: { id: string }) =>
+        post.id === postId,
+    ),
+  ).toBe(true);
+
+  // 10. Vérifier le log POST_RESTORE
+
+  const restoreLog =
+    await prisma.moderationLog.findFirst({
+      where: {
+        action: 'POST_RESTORE',
+        targetType: 'POST',
+        targetId: postId,
+        moderatorId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  expect(restoreLog)
+    .not.toBeNull();
+});
+
   afterAll(async () => {
     await prisma.moderationLog.deleteMany({
       where: {
