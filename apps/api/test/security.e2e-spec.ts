@@ -505,6 +505,312 @@ describe('Securite administrative (e2e)', () => {
     .not.toBeNull();
 });
 
+it('invalide les sessions lors des changements de role et audite les modifications', async () => {
+  await prisma.refreshSession.deleteMany({
+    where: {
+      userId,
+    },
+  });
+
+  await prisma.user.update({
+    where: {
+      id: userId,
+    },
+    data: {
+      role: 'USER',
+      status: 'ACTIVE',
+    },
+  });
+
+  const userLogin =
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: USER_EMAIL,
+        password: USER_PASSWORD,
+      });
+
+  expect([200, 201]).toContain(
+    userLogin.status,
+  );
+
+  const oldUserAccessToken: string =
+    userLogin.body.accessToken;
+
+  const oldUserRefreshToken: string =
+    userLogin.body.refreshToken;
+
+  const adminLogin =
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+      });
+
+  expect([200, 201]).toContain(
+    adminLogin.status,
+  );
+
+  const adminAccessToken: string =
+    adminLogin.body.accessToken;
+
+  const userBefore =
+    await prisma.user.findUniqueOrThrow({
+      where: {
+        id: userId,
+      },
+      select: {
+        role: true,
+        authVersion: true,
+      },
+    });
+
+  expect(userBefore.role)
+    .toBe('USER');
+
+  // USER -> MODERATOR
+
+  const promoteResponse =
+    await request(app.getHttpServer())
+      .patch(
+        `/api/security/users/${userId}/role`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${adminAccessToken}`,
+      )
+      .send({
+        role: 'MODERATOR',
+        reason:
+          'Test e2e de promotion vers MODERATOR',
+      });
+
+  expect(promoteResponse.status)
+    .toBe(200);
+
+  expect(promoteResponse.body.user.role)
+    .toBe('MODERATOR');
+
+  // Ancien refresh USER invalide
+
+  await request(app.getHttpServer())
+    .post('/api/auth/refresh')
+    .send({
+      refreshToken:
+        oldUserRefreshToken,
+    })
+    .expect(401);
+
+  // Ancien access USER invalide
+
+  await request(app.getHttpServer())
+    .get('/api/auth/me')
+    .set(
+      'Authorization',
+      `Bearer ${oldUserAccessToken}`,
+    )
+    .expect(401);
+
+  const promotedUser =
+    await prisma.user.findUniqueOrThrow({
+      where: {
+        id: userId,
+      },
+      select: {
+        role: true,
+        authVersion: true,
+      },
+    });
+
+  expect(promotedUser.role)
+    .toBe('MODERATOR');
+
+  expect(promotedUser.authVersion)
+    .toBe(
+      userBefore.authVersion + 1,
+    );
+
+  // Nouveau login MODERATOR
+
+  const moderatorLogin =
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: USER_EMAIL,
+        password: USER_PASSWORD,
+      });
+
+  expect([200, 201]).toContain(
+    moderatorLogin.status,
+  );
+
+  expect(moderatorLogin.body.user.role)
+    .toBe('MODERATOR');
+
+  const moderatorAccessToken: string =
+    moderatorLogin.body.accessToken;
+
+  const moderatorRefreshToken: string =
+    moderatorLogin.body.refreshToken;
+
+  // MODERATOR peut accéder à la modération
+
+  await request(app.getHttpServer())
+    .get(
+      '/api/moderation/posts/deleted',
+    )
+    .set(
+      'Authorization',
+      `Bearer ${moderatorAccessToken}`,
+    )
+    .expect(200);
+
+  // MODERATOR -> USER
+
+  const demoteResponse =
+    await request(app.getHttpServer())
+      .patch(
+        `/api/security/users/${userId}/role`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${adminAccessToken}`,
+      )
+      .send({
+        role: 'USER',
+        reason:
+          'Test e2e de retour vers USER',
+      });
+
+  expect(demoteResponse.status)
+    .toBe(200);
+
+  expect(demoteResponse.body.user.role)
+    .toBe('USER');
+
+  // Ancien refresh MODERATOR invalide
+
+  await request(app.getHttpServer())
+    .post('/api/auth/refresh')
+    .send({
+      refreshToken:
+        moderatorRefreshToken,
+    })
+    .expect(401);
+
+  // Ancien access MODERATOR invalide
+
+  await request(app.getHttpServer())
+    .get('/api/auth/me')
+    .set(
+      'Authorization',
+      `Bearer ${moderatorAccessToken}`,
+    )
+    .expect(401);
+
+  const demotedUser =
+    await prisma.user.findUniqueOrThrow({
+      where: {
+        id: userId,
+      },
+      select: {
+        role: true,
+        authVersion: true,
+      },
+    });
+
+  expect(demotedUser.role)
+    .toBe('USER');
+
+  expect(demotedUser.authVersion)
+    .toBe(
+      userBefore.authVersion + 2,
+    );
+
+  // Nouveau login final USER
+
+  const finalUserLogin =
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: USER_EMAIL,
+        password: USER_PASSWORD,
+      });
+
+  expect([200, 201]).toContain(
+    finalUserLogin.status,
+  );
+
+  expect(finalUserLogin.body.user.role)
+    .toBe('USER');
+
+  const finalUserAccessToken: string =
+    finalUserLogin.body.accessToken;
+
+  // USER ne peut plus accéder à la modération
+
+  await request(app.getHttpServer())
+    .get(
+      '/api/moderation/posts/deleted',
+    )
+    .set(
+      'Authorization',
+      `Bearer ${finalUserAccessToken}`,
+    )
+    .expect(403);
+
+  // Audit USER -> MODERATOR
+
+  const promotionAudit =
+    await prisma.securityAuditLog.findFirst({
+      where: {
+        action:
+          'USER_ROLE_CHANGED',
+        actorId: adminId,
+        targetUserId: userId,
+        previousRole: 'USER',
+        newRole: 'MODERATOR',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  expect(promotionAudit)
+    .not.toBeNull();
+
+  expect(promotionAudit?.reason)
+    .toBe(
+      'Test e2e de promotion vers MODERATOR',
+    );
+
+  // Audit MODERATOR -> USER
+
+  const demotionAudit =
+    await prisma.securityAuditLog.findFirst({
+      where: {
+        action:
+          'USER_ROLE_CHANGED',
+        actorId: adminId,
+        targetUserId: userId,
+        previousRole: 'MODERATOR',
+        newRole: 'USER',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  expect(demotionAudit)
+    .not.toBeNull();
+
+  expect(demotionAudit?.reason)
+    .toBe(
+      'Test e2e de retour vers USER',
+    );
+});
+
   afterAll(async () => {
     await prisma.securityAuditLog.deleteMany({
       where: {
