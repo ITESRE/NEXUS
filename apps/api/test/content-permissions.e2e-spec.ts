@@ -421,6 +421,218 @@ describe('Permissions de modification des contenus (e2e)', () => {
       .toBe('POST_UPDATE');
   });
 
+  it('applique correctement les droits de modification d un commentaire et l audit ADMIN', async () => {
+  // 1. AUTHOR crée un post
+
+  const postResponse =
+    await request(app.getHttpServer())
+      .post('/api/posts')
+      .set(
+        'Authorization',
+        `Bearer ${authorAccessToken}`,
+      )
+      .send({
+        content:
+          'Post support du test de permissions commentaire',
+      });
+
+  expect([200, 201]).toContain(
+    postResponse.status,
+  );
+
+  const postId: string =
+    postResponse.body.id;
+
+  expect(postId)
+    .toBeDefined();
+
+  // 2. AUTHOR crée un commentaire
+
+  const commentResponse =
+    await request(app.getHttpServer())
+      .post(
+        `/api/posts/${postId}/comments`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${authorAccessToken}`,
+      )
+      .send({
+        content:
+          'Commentaire initial pour test des permissions',
+      });
+
+  expect([200, 201]).toContain(
+    commentResponse.status,
+  );
+
+  const commentId: string =
+    commentResponse.body.id;
+
+  expect(commentId)
+    .toBeDefined();
+
+  // 3. Compter les logs COMMENT_UPDATE avant modification auteur
+
+  const authorUpdateLogsBefore =
+    await prisma.moderationLog.count({
+      where: {
+        action: 'COMMENT_UPDATE',
+        targetType: 'COMMENT',
+        targetId: commentId,
+      },
+    });
+
+  // 4. AUTHOR modifie son propre commentaire
+
+  const authorUpdateResponse =
+    await request(app.getHttpServer())
+      .patch(
+        `/api/comments/${commentId}`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${authorAccessToken}`,
+      )
+      .send({
+        content:
+          'Commentaire modifie par son auteur',
+      });
+
+  expect(authorUpdateResponse.status)
+    .toBe(200);
+
+  expect(
+    authorUpdateResponse.body.content,
+  ).toBe(
+    'Commentaire modifie par son auteur',
+  );
+
+  // 5. Vérifier qu'aucun audit COMMENT_UPDATE
+  // n'a été créé pour la modification par l'auteur
+
+  const authorUpdateLogsAfter =
+    await prisma.moderationLog.count({
+      where: {
+        action: 'COMMENT_UPDATE',
+        targetType: 'COMMENT',
+        targetId: commentId,
+      },
+    });
+
+  expect(authorUpdateLogsAfter)
+    .toBe(authorUpdateLogsBefore);
+
+  // 6. OTHER USER ne peut pas modifier le commentaire
+
+  await request(app.getHttpServer())
+    .patch(
+      `/api/comments/${commentId}`,
+    )
+    .set(
+      'Authorization',
+      `Bearer ${otherUserAccessToken}`,
+    )
+    .send({
+      content:
+        'Tentative de modification par autre USER',
+    })
+    .expect(403);
+
+  // 7. MODERATOR ne peut pas réécrire
+  // le commentaire d'un autre utilisateur
+
+  await request(app.getHttpServer())
+    .patch(
+      `/api/comments/${commentId}`,
+    )
+    .set(
+      'Authorization',
+      `Bearer ${moderatorAccessToken}`,
+    )
+    .send({
+      content:
+        'Tentative de modification par MODERATOR',
+    })
+    .expect(403);
+
+  // 8. ADMIN peut modifier le commentaire d'autrui
+
+  const adminUpdateResponse =
+    await request(app.getHttpServer())
+      .patch(
+        `/api/comments/${commentId}`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${adminAccessToken}`,
+      )
+      .send({
+        content:
+          'Commentaire modifie par ADMIN',
+      });
+
+  expect(adminUpdateResponse.status)
+    .toBe(200);
+
+  expect(
+    adminUpdateResponse.body.content,
+  ).toBe(
+    'Commentaire modifie par ADMIN',
+  );
+
+  // 9. Vérifier le contenu final via GET comments
+
+  const commentsResponse =
+    await request(app.getHttpServer())
+      .get(
+        `/api/posts/${postId}/comments`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${authorAccessToken}`,
+      )
+      .expect(200);
+
+  const updatedComment =
+    commentsResponse.body.find(
+      (comment: { id: string }) =>
+        comment.id === commentId,
+    );
+
+  expect(updatedComment)
+    .toBeDefined();
+
+  expect(updatedComment.content)
+    .toBe(
+      'Commentaire modifie par ADMIN',
+    );
+
+  // 10. Vérifier le log COMMENT_UPDATE
+
+  const adminUpdateLog =
+    await prisma.moderationLog.findFirst({
+      where: {
+        action: 'COMMENT_UPDATE',
+        targetType: 'COMMENT',
+        targetId: commentId,
+        moderatorId: adminId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+  expect(adminUpdateLog)
+    .not.toBeNull();
+
+  expect(adminUpdateLog?.moderatorId)
+    .toBe(adminId);
+
+  expect(adminUpdateLog?.action)
+    .toBe('COMMENT_UPDATE');
+});
+
   afterAll(async () => {
     await prisma.moderationLog.deleteMany({
       where: {
