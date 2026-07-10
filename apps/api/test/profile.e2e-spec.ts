@@ -13,7 +13,7 @@ import {
 import request from 'supertest';
 import { App } from 'supertest/types';
 import * as argon2 from 'argon2';
-
+import { SecurityAction } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { setupApp } from '../src/app.setup';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -47,11 +47,42 @@ describe('Profil utilisateur (e2e)', () => {
 
     prisma = app.get(PrismaService);
 
-    await prisma.user.deleteMany({
+const existingUser =
+  await prisma.user.findUnique({
+    where: {
+      email: TEST_EMAIL,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existingUser) {
+    await prisma.securityAuditLog.deleteMany({
       where: {
-        email: TEST_EMAIL,
+        OR: [
+          {
+            actorId: existingUser.id,
+          },
+          {
+            targetUserId: existingUser.id,
+          },
+        ],
       },
     });
+
+    await prisma.refreshSession.deleteMany({
+      where: {
+        userId: existingUser.id,
+      },
+    });
+
+    await prisma.user.delete({
+      where: {
+        id: existingUser.id,
+      },
+    });
+  }
 
     const passwordHash =
       await argon2.hash(
@@ -176,6 +207,16 @@ describe('Profil utilisateur (e2e)', () => {
       })
       .expect(400);
 
+      const passwordAuditCountBefore =
+  await prisma.securityAuditLog.count({
+    where: {
+      action:
+        SecurityAction.USER_PASSWORD_CHANGED,
+      actorId: userId,
+      targetUserId: userId,
+    },
+  });
+
     // Changement valide
 
     const changeResponse =
@@ -214,6 +255,51 @@ describe('Profil utilisateur (e2e)', () => {
       .toBe(
         userBefore.authVersion + 1,
       );
+
+      // Un audit de sécurité doit avoir été créé
+
+const passwordAuditCountAfter =
+  await prisma.securityAuditLog.count({
+    where: {
+      action:
+        SecurityAction.USER_PASSWORD_CHANGED,
+      actorId: userId,
+      targetUserId: userId,
+    },
+  });
+
+expect(passwordAuditCountAfter)
+  .toBe(
+    passwordAuditCountBefore + 1,
+  );
+
+const passwordAuditLog =
+  await prisma.securityAuditLog.findFirst({
+    where: {
+      action:
+        SecurityAction.USER_PASSWORD_CHANGED,
+      actorId: userId,
+      targetUserId: userId,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+expect(passwordAuditLog)
+  .not.toBeNull();
+
+expect(passwordAuditLog?.action)
+  .toBe(
+    SecurityAction.USER_PASSWORD_CHANGED,
+  );
+
+expect(passwordAuditLog?.actorId)
+  .toBe(userId);
+
+expect(passwordAuditLog?.targetUserId)
+  .toBe(userId);
+
 
     // Ancien access token → 401
 
@@ -280,13 +366,32 @@ describe('Profil utilisateur (e2e)', () => {
       .expect(200);
   });
 
-  afterAll(async () => {
-    await prisma.user.deleteMany({
-      where: {
-        email: TEST_EMAIL,
-      },
-    });
-
-    await app.close();
+afterAll(async () => {
+  await prisma.securityAuditLog.deleteMany({
+    where: {
+      OR: [
+        {
+          actorId: userId,
+        },
+        {
+          targetUserId: userId,
+        },
+      ],
+    },
   });
+
+  await prisma.refreshSession.deleteMany({
+    where: {
+      userId,
+    },
+  });
+
+  await prisma.user.deleteMany({
+    where: {
+      id: userId,
+    },
+  });
+
+  await app.close();
+});
 });

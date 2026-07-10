@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import * as argon2 from 'argon2';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { SecurityAction } from '@prisma/client';
 
 @Injectable()
 export class ProfileService {
@@ -163,6 +164,15 @@ export class ProfileService {
             lastUsedAt: now,
           },
         });
+
+        await tx.securityAuditLog.create({
+        data: {
+          action:
+            SecurityAction.USER_PASSWORD_CHANGED,
+          actorId: userId,
+          targetUserId: userId,
+        },
+      });
 
       return {
         message:
