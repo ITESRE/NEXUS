@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "SecurityAction" ADD VALUE 'USER_PASSWORD_CHANGED';
