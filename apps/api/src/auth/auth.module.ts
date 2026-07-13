@@ -8,6 +8,7 @@ import { UsersModule } from '../users/users.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ConfigService } from '@nestjs/config';
 import { RefreshSessionCleanupService } from './refresh-session-cleanup.service';
+import { PasswordResetTokenCleanupService } from './password-reset-token-cleanup.service';
 import { MailModule } from '../mail/mail.module';
 
 @Module({
@@ -27,7 +28,7 @@ import { MailModule } from '../mail/mail.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, RefreshSessionCleanupService,],
+  providers: [AuthService, JwtStrategy, RefreshSessionCleanupService, PasswordResetTokenCleanupService,],
   exports: [AuthService],
 })
 export class AuthModule {}
