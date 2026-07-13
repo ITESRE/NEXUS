@@ -75,4 +75,46 @@ export class MailService {
       `,
     });
   }
+
+  async sendEmailChangeVerificationEmail(
+    recipientEmail: string,
+    emailChangeToken: string,
+  ): Promise<void> {
+    const verificationUrl = new URL(
+      '/verify-email-change',
+      this.frontendUrl,
+    );
+
+    verificationUrl.searchParams.set(
+      'token',
+      emailChangeToken,
+    );
+
+    const verificationUrlString =
+      verificationUrl.toString();
+
+    await this.transporter.sendMail({
+      from: this.from,
+      to: recipientEmail,
+      subject:
+        'Vérification de votre nouvelle adresse email NEXUS',
+      text: [
+        'Une demande de changement d’adresse email a été effectuée pour votre compte NEXUS.',
+        '',
+        `Confirmez votre nouvelle adresse avec ce lien : ${verificationUrlString}`,
+        '',
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.",
+      ].join('\n'),
+      html: `
+        <p>Une demande de changement d’adresse email a été effectuée pour votre compte NEXUS.</p>
+        <p>
+          <a href="${verificationUrlString}">
+            Confirmer ma nouvelle adresse email
+          </a>
+        </p>
+        <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+      `,
+    });
+  }
+
 }

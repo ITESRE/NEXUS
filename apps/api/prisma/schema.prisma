@@ -44,6 +44,7 @@ enum SecurityAction {
   USER_ROLE_CHANGED
   USER_PASSWORD_CHANGED
   USER_PASSWORD_RESET
+  USER_EMAIL_CHANGED
 }
 
 model User {
@@ -61,6 +62,7 @@ model User {
   moderationLogs ModerationLog[]
   refreshSessions  RefreshSession[]
   passwordResetTokens PasswordResetToken[]
+  emailChangeTokens EmailChangeToken[]
   securityActionsPerformed SecurityAuditLog[] @relation("SecurityAuditActor")
   securityActionsReceived  SecurityAuditLog[] @relation("SecurityAuditTarget")
 
@@ -146,6 +148,24 @@ model PasswordResetToken {
   @@index([expiresAt])
 }
 
+model EmailChangeToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  newEmail  String
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, usedAt])
+  @@index([newEmail])
+  @@index([expiresAt])
+}
+
 model SecurityAuditLog {
   id           String         @id @default(uuid())
   action       SecurityAction
@@ -158,6 +178,9 @@ model SecurityAuditLog {
 
   previousRole   UserRole?
   newRole        UserRole?
+
+  previousEmail  String?
+  newEmail       String?
 
   actor        User           @relation("SecurityAuditActor", fields: [actorId], references: [id])
   targetUser   User           @relation("SecurityAuditTarget", fields: [targetUserId], references: [id])
