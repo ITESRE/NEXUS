@@ -1,0 +1,81 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Build and e2e tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DATABASE_URL: postgresql://nexus_user:nexus_password@localhost:5432/nexus_test
+      JWT_ACCESS_SECRET: nexus-ci-${{ github.run_id }}-${{ github.run_attempt }}-temporary-secret-not-production
+      JWT_ACCESS_EXPIRES_IN: 15m
+      REFRESH_TOKEN_TTL_DAYS: 30
+      PORT: 4001
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: nexus_test
+          POSTGRES_USER: nexus_user
+          POSTGRES_PASSWORD: nexus_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus_user -d nexus_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - name: Recuperer le depot
+        uses: actions/checkout@v6
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Installer les dependances
+        run: npm ci
+
+      - name: Creer la configuration e2e
+        shell: bash
+        run: |
+          cat > .env.test <<EOF
+          DATABASE_URL=${DATABASE_URL}
+          JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+          JWT_ACCESS_EXPIRES_IN=${JWT_ACCESS_EXPIRES_IN}
+          REFRESH_TOKEN_TTL_DAYS=${REFRESH_TOKEN_TTL_DAYS}
+          PORT=${PORT}
+          EOF
+
+      - name: Generer Prisma Client
+        run: npx prisma generate
+
+      - name: Appliquer les migrations Prisma
+        run: npx prisma migrate deploy
+
+      - name: Compiler le backend
+        run: npm run build
+
+      - name: Executer les tests e2e
+        run: npm run test:e2e -- --runInBand
