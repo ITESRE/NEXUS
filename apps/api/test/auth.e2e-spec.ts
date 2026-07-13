@@ -12,8 +12,7 @@ import {
 } from '@jest/globals';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import * as argon2 from 'argon2';
-
+import { hashPassword } from '../src/security/password.security';
 import { AppModule } from '../src/app.module';
 import { setupApp } from '../src/app.setup';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -49,12 +48,7 @@ describe('Authentification (e2e)', () => {
     });
 
     const passwordHash =
-      await argon2.hash(TEST_PASSWORD, {
-        type: argon2.argon2id,
-        memoryCost: 19456,
-        timeCost: 2,
-        parallelism: 1,
-      });
+      await hashPassword(TEST_PASSWORD);
 
     await prisma.user.create({
       data: {

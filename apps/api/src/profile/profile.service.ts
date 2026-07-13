@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import * as argon2 from 'argon2';
+import {
+  hashPassword,
+  verifyPassword,
+} from '../security/password.security';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { SecurityAction } from '@prisma/client';
 
@@ -103,7 +106,7 @@ export class ProfileService {
   }
 
   const isCurrentPasswordValid =
-    await argon2.verify(
+    await verifyPassword(
       user.passwordHash,
       changePasswordDto.currentPassword,
     );
@@ -115,7 +118,7 @@ export class ProfileService {
   }
 
   const isSamePassword =
-    await argon2.verify(
+    await verifyPassword(
       user.passwordHash,
       changePasswordDto.newPassword,
     );
@@ -127,14 +130,8 @@ export class ProfileService {
   }
 
   const newPasswordHash =
-    await argon2.hash(
+    await hashPassword(
       changePasswordDto.newPassword,
-      {
-        type: argon2.argon2id,
-        memoryCost: 19456,
-        timeCost: 2,
-        parallelism: 1,
-      },
     );
 
   const now = new Date();

@@ -12,8 +12,7 @@ import {
 } from '@jest/globals';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import * as argon2 from 'argon2';
-
+import { hashPassword } from '../src/security/password.security';
 import { AppModule } from '../src/app.module';
 import { setupApp } from '../src/app.setup';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -99,22 +98,10 @@ describe('Securite administrative (e2e)', () => {
       });
     }
 
-    const userPasswordHash =
-      await argon2.hash(USER_PASSWORD, {
-        type: argon2.argon2id,
-        memoryCost: 19456,
-        timeCost: 2,
-        parallelism: 1,
-      });
+    const userPasswordHash = await hashPassword(USER_PASSWORD);
 
-    const adminPasswordHash =
-      await argon2.hash(ADMIN_PASSWORD, {
-        type: argon2.argon2id,
-        memoryCost: 19456,
-        timeCost: 2,
-        parallelism: 1,
-      });
-
+    const adminPasswordHash = await hashPassword(ADMIN_PASSWORD);
+    
     const user =
       await prisma.user.create({
         data: {

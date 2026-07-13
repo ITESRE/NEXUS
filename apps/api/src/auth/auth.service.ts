@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
+import { verifyPassword } from '../security/password.security';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { createHash, randomBytes } from 'crypto';
@@ -28,7 +28,7 @@ export class AuthService {
       throw new UnauthorizedException('Identifiants invalides');
     }
 
-    const isPasswordValid = await argon2.verify(
+    const isPasswordValid = await verifyPassword(
       user.passwordHash,
       loginDto.password,
     );

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import * as argon2 from 'argon2';
+import { hashPassword } from '../security/password.security';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
@@ -49,12 +49,7 @@ export class UsersService {
       throw new ConflictException('Un utilisateur avec cet email existe déjà');
     }
 
-    const passwordHash = await argon2.hash(createUserDto.password, {
-      type: argon2.argon2id,
-      memoryCost: 19456,
-      timeCost: 2,
-      parallelism: 1,
-    });
+    const passwordHash = await hashPassword(createUserDto.password);
 
     return this.prisma.user.create({
       data: {
