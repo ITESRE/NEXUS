@@ -12,7 +12,9 @@ import { SecurityModule } from './security/security.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule, } from '@nestjs/throttler';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import * as Joi from 'joi';
+
 
 @Module({
   imports: [ ConfigModule.forRoot({
@@ -35,6 +37,9 @@ import * as Joi from 'joi';
       .required(),
   }),
 }),
+  
+  ScheduleModule.forRoot(),
+  
   ThrottlerModule.forRoot({
   throttlers: [
     {

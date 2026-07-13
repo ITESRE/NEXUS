@@ -7,6 +7,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ConfigService } from '@nestjs/config';
+import { RefreshSessionCleanupService } from './refresh-session-cleanup.service';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { ConfigService } from '@nestjs/config';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, RefreshSessionCleanupService,],
   exports: [AuthService],
 })
 export class AuthModule {}
