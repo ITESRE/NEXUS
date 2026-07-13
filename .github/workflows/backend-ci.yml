@@ -23,6 +23,11 @@ jobs:
       JWT_ACCESS_EXPIRES_IN: 15m
       REFRESH_TOKEN_TTL_DAYS: 30
       PORT: 4001
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      SMTP_FROM: "NEXUS CI <no-reply-ci@nexus.local>"
+      FRONTEND_URL: http://localhost:3000
 
     services:
       postgres:
@@ -66,6 +71,11 @@ jobs:
           JWT_ACCESS_EXPIRES_IN=${JWT_ACCESS_EXPIRES_IN}
           REFRESH_TOKEN_TTL_DAYS=${REFRESH_TOKEN_TTL_DAYS}
           PORT=${PORT}
+          SMTP_HOST=${SMTP_HOST}
+          SMTP_PORT=${SMTP_PORT}
+          SMTP_SECURE=${SMTP_SECURE}
+          SMTP_FROM=${SMTP_FROM}
+          FRONTEND_URL=${FRONTEND_URL}
           EOF
 
       - name: Generer Prisma Client

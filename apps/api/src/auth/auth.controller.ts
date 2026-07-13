@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
@@ -17,6 +18,8 @@ import { RolesGuard } from './roles.guard';
 import { UserRole } from '@prisma/client';
 import { Roles } from './roles.decorator';
 import { Throttle } from '@nestjs/throttler';
+import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
+import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -31,6 +34,43 @@ export class AuthController {
   })
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('password-reset/request')
+  @HttpCode(200)
+  @Throttle({
+    default: {
+      limit: 5,
+      ttl: 15 * 60_000,
+    },
+  })
+  requestPasswordReset(
+    @Body()
+    passwordResetRequestDto:
+      PasswordResetRequestDto,
+  ) {
+    return this.authService.requestPasswordReset(
+      passwordResetRequestDto.email,
+    );
+  }
+
+  @Post('password-reset/confirm')
+  @HttpCode(200)
+  @Throttle({
+    default: {
+      limit: 10,
+      ttl: 15 * 60_000,
+    },
+  })
+  confirmPasswordReset(
+    @Body()
+    passwordResetConfirmDto:
+      PasswordResetConfirmDto,
+  ) {
+    return this.authService.confirmPasswordReset(
+      passwordResetConfirmDto.token,
+      passwordResetConfirmDto.newPassword,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

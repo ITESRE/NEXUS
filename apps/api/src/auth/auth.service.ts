@@ -1,20 +1,31 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
-import { verifyPassword } from '../security/password.security';
+import { verifyPassword, hashPassword, } from '../security/password.security';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecurityAction, UserStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
+import { MailService } from '../mail/mail.service';
+import {
+  generatePasswordResetToken,
+  getPasswordResetTokenExpirationDate,
+  hashPasswordResetToken,
+} from '../security/password-reset-token.security';
 
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(
+    AuthService.name,
+  );
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {}
 
   async login(loginDto: LoginDto) {
@@ -119,6 +130,229 @@ private getRefreshTokenExpirationDate(): Date {
   );
 
   return expiresAt;
+}
+
+async requestPasswordReset(
+  email: string,
+) {
+  const genericResponse = {
+    message:
+      'Si un compte correspond, un email de réinitialisation a été envoyé',
+  };
+
+  const user = await this.prisma.user.findUnique({
+    where: {
+      email,
+    },
+    select: {
+      id: true,
+      email: true,
+      status: true,
+    },
+  });
+
+  if (
+    !user ||
+    user.status !== UserStatus.ACTIVE
+  ) {
+    return genericResponse;
+  }
+
+  const resetToken =
+    generatePasswordResetToken();
+
+  const tokenHash =
+    hashPasswordResetToken(resetToken);
+
+  const now = new Date();
+
+  await this.prisma.$transaction(
+    async (tx) => {
+      await tx.passwordResetToken.updateMany({
+        where: {
+          userId: user.id,
+          usedAt: null,
+          expiresAt: {
+            gt: now,
+          },
+        },
+        data: {
+          usedAt: now,
+        },
+      });
+
+      await tx.passwordResetToken.create({
+        data: {
+          tokenHash,
+          userId: user.id,
+          expiresAt:
+            getPasswordResetTokenExpirationDate(
+              now,
+            ),
+        },
+      });
+    },
+  );
+
+  try {
+    await this.mailService.sendPasswordResetEmail(
+      user.email,
+      resetToken,
+    );
+  } catch (error) {
+    this.logger.error(
+      "Échec de l'envoi de l'email de réinitialisation",
+      error instanceof Error
+        ? error.stack
+        : undefined,
+    );
+  }
+
+  return genericResponse;
+}
+
+async confirmPasswordReset(
+  resetToken: string,
+  newPassword: string,
+) {
+  const invalidTokenMessage =
+    'Token de réinitialisation invalide ou expiré';
+
+  const tokenHash =
+    hashPasswordResetToken(resetToken);
+
+  const now = new Date();
+
+  const passwordResetToken =
+    await this.prisma.passwordResetToken.findUnique({
+      where: {
+        tokenHash,
+      },
+      select: {
+        id: true,
+        userId: true,
+        expiresAt: true,
+        usedAt: true,
+        user: {
+          select: {
+            status: true,
+            passwordHash: true,
+          },
+        },
+      },
+    });
+
+  if (
+    !passwordResetToken ||
+    passwordResetToken.usedAt ||
+    passwordResetToken.expiresAt <= now ||
+    passwordResetToken.user.status !==
+      UserStatus.ACTIVE
+  ) {
+    throw new BadRequestException(
+      invalidTokenMessage,
+    );
+  }
+
+  const isSamePassword =
+    await verifyPassword(
+      passwordResetToken.user.passwordHash,
+      newPassword,
+    );
+
+  if (isSamePassword) {
+    throw new BadRequestException(
+      'Le nouveau mot de passe doit être différent du mot de passe actuel',
+    );
+  }
+
+  const newPasswordHash =
+    await hashPassword(newPassword);
+
+  await this.prisma.$transaction(
+    async (tx) => {
+      const claimedToken =
+        await tx.passwordResetToken.updateMany({
+          where: {
+            id: passwordResetToken.id,
+            userId:
+              passwordResetToken.userId,
+            usedAt: null,
+            expiresAt: {
+              gt: now,
+            },
+          },
+          data: {
+            usedAt: now,
+          },
+        });
+
+      if (claimedToken.count !== 1) {
+        throw new BadRequestException(
+          invalidTokenMessage,
+        );
+      }
+
+      const updatedUser =
+        await tx.user.updateMany({
+          where: {
+            id: passwordResetToken.userId,
+            status: UserStatus.ACTIVE,
+          },
+          data: {
+            passwordHash: newPasswordHash,
+            authVersion: {
+              increment: 1,
+            },
+          },
+        });
+
+      if (updatedUser.count !== 1) {
+        throw new BadRequestException(
+          invalidTokenMessage,
+        );
+      }
+
+      await tx.refreshSession.updateMany({
+        where: {
+          userId:
+            passwordResetToken.userId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+          lastUsedAt: now,
+        },
+      });
+
+      await tx.passwordResetToken.updateMany({
+        where: {
+          userId:
+            passwordResetToken.userId,
+          usedAt: null,
+        },
+        data: {
+          usedAt: now,
+        },
+      });
+
+      await tx.securityAuditLog.create({
+        data: {
+          action:
+            SecurityAction.USER_PASSWORD_RESET,
+          actorId:
+            passwordResetToken.userId,
+          targetUserId:
+            passwordResetToken.userId,
+        },
+      });
+    },
+  );
+
+  return {
+    message:
+      'Mot de passe réinitialisé avec succès',
+  };
 }
 
 async refresh(refreshToken: string) {

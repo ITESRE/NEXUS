@@ -8,10 +8,11 @@ import { UsersModule } from '../users/users.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ConfigService } from '@nestjs/config';
 import { RefreshSessionCleanupService } from './refresh-session-cleanup.service';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
-    UsersModule, PrismaModule,
+    UsersModule, PrismaModule, MailModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],

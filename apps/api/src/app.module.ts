@@ -35,6 +35,29 @@ import * as Joi from 'joi';
       .integer()
       .positive()
       .required(),
+
+    SMTP_HOST: Joi.string()
+      .min(1)
+      .required(),
+
+    SMTP_PORT: Joi.number()
+      .integer()
+      .min(1)
+      .max(65535)
+      .required(),
+
+    SMTP_SECURE: Joi.boolean()
+      .required(),
+
+    SMTP_FROM: Joi.string()
+      .min(3)
+      .required(),
+
+    FRONTEND_URL: Joi.string()
+      .uri({
+        scheme: ['http', 'https'],
+      })
+      .required(),
   }),
 }),
   
