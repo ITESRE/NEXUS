@@ -16,8 +16,12 @@ import { hashPassword } from '../src/security/password.security';
 import { AppModule } from '../src/app.module';
 import { setupApp } from '../src/app.setup';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createHash } from 'crypto';
 
 const TEST_EMAIL = 'e2e-user@nexus.local';
+
+const OTHER_TEST_EMAIL =
+  'e2e-other-user@nexus.local';
 
 const TEST_PASSWORD = 'E2ePassword123!';
 
@@ -43,7 +47,12 @@ describe('Authentification (e2e)', () => {
 
     await prisma.user.deleteMany({
       where: {
-        email: TEST_EMAIL,
+        email: {
+          in: [
+            TEST_EMAIL,
+            OTHER_TEST_EMAIL,
+          ],
+        },
       },
     });
 
@@ -58,6 +67,15 @@ describe('Authentification (e2e)', () => {
         lastName: 'User',
       },
     });
+    await prisma.user.create({
+      data: {
+        email: OTHER_TEST_EMAIL,
+        passwordHash,
+        firstName: 'E2E',
+        lastName: 'Other',
+      },
+    });
+
   });
 
   it('refuse un mauvais mot de passe', async () => {
@@ -201,6 +219,195 @@ describe('Authentification (e2e)', () => {
       .expect(400);
   });
 
+  it('refuse la liste des sessions sans JWT', async () => {
+  await request(app.getHttpServer())
+    .get('/api/auth/sessions')
+    .expect(401);
+});
+
+it('liste les sessions actives sans exposer tokenHash', async () => {
+  const response =
+    await request(app.getHttpServer())
+      .get('/api/auth/sessions')
+      .set(
+        'Authorization',
+        `Bearer ${accessToken}`,
+      )
+      .expect(200);
+
+  expect(
+    Array.isArray(response.body),
+  ).toBe(true);
+
+  expect(
+    response.body.length,
+  ).toBeGreaterThan(0);
+
+  for (const session of response.body) {
+    expect(session.id).toBeDefined();
+    expect(session.expiresAt).toBeDefined();
+    expect(session.createdAt).toBeDefined();
+
+    expect(
+      session.tokenHash,
+    ).toBeUndefined();
+
+    expect(
+      session.userId,
+    ).toBeUndefined();
+
+    expect(
+      session.revokedAt,
+    ).toBeUndefined();
+  }
+});
+
+it('refuse un sessionId qui ne respecte pas le format UUID', async () => {
+  await request(app.getHttpServer())
+    .delete(
+      '/api/auth/sessions/pas-un-uuid',
+    )
+    .set(
+      'Authorization',
+      `Bearer ${accessToken}`,
+    )
+    .expect(400);
+});
+
+it('revoque une session personnelle sans invalider son access token', async () => {
+  const loginResponse =
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: TEST_EMAIL,
+        password: TEST_PASSWORD,
+      });
+
+  expect([200, 201]).toContain(
+    loginResponse.status,
+  );
+
+  const sessionAccessToken: string =
+    loginResponse.body.accessToken;
+
+  const sessionRefreshToken: string =
+    loginResponse.body.refreshToken;
+
+  const tokenHash = createHash('sha256')
+    .update(sessionRefreshToken)
+    .digest('hex');
+
+  const session =
+    await prisma.refreshSession.findUniqueOrThrow({
+      where: {
+        tokenHash,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+  const revokeResponse =
+    await request(app.getHttpServer())
+      .delete(
+        `/api/auth/sessions/${session.id}`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${sessionAccessToken}`,
+      )
+      .expect(200);
+
+  expect(
+    revokeResponse.body.message,
+  ).toBe('Session déconnectée');
+
+  await request(app.getHttpServer())
+    .post('/api/auth/refresh')
+    .send({
+      refreshToken: sessionRefreshToken,
+    })
+    .expect(401);
+
+  await request(app.getHttpServer())
+    .get('/api/auth/me')
+    .set(
+      'Authorization',
+      `Bearer ${sessionAccessToken}`,
+    )
+    .expect(200);
+
+  await request(app.getHttpServer())
+    .delete(
+      `/api/auth/sessions/${session.id}`,
+    )
+    .set(
+      'Authorization',
+      `Bearer ${sessionAccessToken}`,
+    )
+    .expect(404);
+});
+
+it("interdit de revoquer la session d'un autre utilisateur", async () => {
+  const otherLoginResponse =
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: OTHER_TEST_EMAIL,
+        password: TEST_PASSWORD,
+      });
+
+  expect([200, 201]).toContain(
+    otherLoginResponse.status,
+  );
+
+  const otherRefreshToken: string =
+    otherLoginResponse.body.refreshToken;
+
+  const otherTokenHash = createHash('sha256')
+    .update(otherRefreshToken)
+    .digest('hex');
+
+  const otherSession =
+    await prisma.refreshSession.findUniqueOrThrow({
+      where: {
+        tokenHash: otherTokenHash,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+  await request(app.getHttpServer())
+    .delete(
+      `/api/auth/sessions/${otherSession.id}`,
+    )
+    .set(
+      'Authorization',
+      `Bearer ${accessToken}`,
+    )
+    .expect(404);
+
+  const refreshResponse =
+    await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({
+        refreshToken: otherRefreshToken,
+      });
+
+  expect([200, 201]).toContain(
+    refreshResponse.status,
+  );
+
+  expect(
+    refreshResponse.body.accessToken,
+  ).toBeDefined();
+
+  expect(
+    refreshResponse.body.refreshToken,
+  ).toBeDefined();
+});
+
   it('invalide les anciens access et refresh tokens apres logout-all', async () => {
     const loginResponse =
       await request(app.getHttpServer())
@@ -311,7 +518,12 @@ describe('Authentification (e2e)', () => {
   afterAll(async () => {
     await prisma.user.deleteMany({
       where: {
-        email: TEST_EMAIL,
+        email: {
+          in: [
+            TEST_EMAIL,
+            OTHER_TEST_EMAIL,
+          ],
+        },
       },
     });
 

@@ -292,6 +292,63 @@ async logoutAll(userId: string) {
   });
 }
 
+async getActiveSessions(userId: string) {
+  const now = new Date();
+
+  return this.prisma.refreshSession.findMany({
+    where: {
+      userId,
+      revokedAt: null,
+      expiresAt: {
+        gt: now,
+      },
+    },
+    select: {
+      id: true,
+      expiresAt: true,
+      lastUsedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
+async revokeSession(
+  userId: string,
+  sessionId: string,
+) {
+  const now = new Date();
+
+  const result =
+    await this.prisma.refreshSession.updateMany({
+      where: {
+        id: sessionId,
+        userId,
+        revokedAt: null,
+        expiresAt: {
+          gt: now,
+        },
+      },
+      data: {
+        revokedAt: now,
+        lastUsedAt: now,
+      },
+    });
+
+  if (result.count !== 1) {
+    throw new NotFoundException(
+      'Session active introuvable',
+    );
+  }
+
+  return {
+    message: 'Session déconnectée',
+  };
+}
+
 async logoutAllForUser(
   userId: string,
   actorId: string,

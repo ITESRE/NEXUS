@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -50,6 +60,29 @@ export class AuthController {
   ) {
   return this.authService.logout(
     refreshTokenDto.refreshToken,
+  );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  getActiveSessions(
+  @Req() req: any,
+  ) {
+  return this.authService.getActiveSessions(
+    req.user.userId,
+  );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('sessions/:sessionId')
+  revokeSession(
+  @Param('sessionId', new ParseUUIDPipe())
+  sessionId: string,
+  @Req() req: any,
+  ) {
+  return this.authService.revokeSession(
+    req.user.userId,
+    sessionId,
   );
   }
 
