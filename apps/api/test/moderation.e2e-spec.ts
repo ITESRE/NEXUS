@@ -204,6 +204,43 @@ describe('Moderation (e2e)', () => {
     coreOnlyAdminId =
       coreOnlyAdmin.id;
 
+    const nexusSocialApplication =
+      await prisma.application
+        .findUniqueOrThrow({
+          where: {
+            key: 'NEXUS_SOCIAL',
+          },
+          select: {
+            id: true,
+          },
+        });
+
+    await prisma.userApplicationAccess
+      .createMany({
+        data: [
+          {
+            userId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+          {
+            userId: moderatorId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+          {
+            userId: adminId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+          {
+            userId: coreOnlyAdminId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+        ],
+        skipDuplicates: true,
+      });
     const userLogin =
       await request(app.getHttpServer())
         .post('/api/auth/login')
@@ -317,6 +354,81 @@ describe('Moderation (e2e)', () => {
       .expect(403);
   });
 
+  it('revoque immediatement NEXUS Social sans supprimer le SocialProfile', async () => {
+    const nexusSocialApplication =
+      await prisma.application
+        .findUniqueOrThrow({
+          where: {
+            key: 'NEXUS_SOCIAL',
+          },
+          select: {
+            id: true,
+          },
+        });
+
+    const socialProfileBefore =
+      await prisma.socialProfile
+        .findUnique({
+          where: {
+            userId: moderatorId,
+          },
+          select: {
+            role: true,
+          },
+        });
+
+    expect(socialProfileBefore)
+      .toEqual({
+        role: 'MODERATOR',
+      });
+
+    await prisma.userApplicationAccess
+      .delete({
+        where: {
+          userId_applicationId: {
+            userId: moderatorId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+        },
+      });
+
+    try {
+      await request(app.getHttpServer())
+        .get('/api/moderation/posts/deleted')
+        .set(
+          'Authorization',
+          `Bearer ${moderatorAccessToken}`,
+        )
+        .expect(403);
+
+      const socialProfileAfter =
+        await prisma.socialProfile
+          .findUnique({
+            where: {
+              userId: moderatorId,
+            },
+            select: {
+              role: true,
+            },
+          });
+
+      expect(socialProfileAfter)
+        .toEqual({
+          role: 'MODERATOR',
+        });
+    }
+    finally {
+      await prisma.userApplicationAccess
+        .create({
+          data: {
+            userId: moderatorId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+        });
+    }
+  });
   it('autorise un MODERATOR a voir les contenus supprimes', async () => {
     await request(app.getHttpServer())
       .get('/api/moderation/posts/deleted')

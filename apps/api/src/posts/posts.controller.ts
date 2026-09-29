@@ -10,6 +10,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SocialRole } from '@prisma/client';
+import { ApplicationAccessGuard } from '../applications/application-access.guard';
+import { RequireApplication } from '../applications/application-access.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SocialAccessGuard } from '../social/social-access.guard';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -24,8 +26,10 @@ type RequestWithSocialUser = {
 };
 
 @Controller('posts')
+@RequireApplication('NEXUS_SOCIAL')
 @UseGuards(
   JwtAuthGuard,
+  ApplicationAccessGuard,
   SocialAccessGuard,
 )
 export class PostsController {

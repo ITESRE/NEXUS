@@ -228,6 +228,48 @@ describe('Permissions de modification des contenus (e2e)', () => {
     coreOnlyAdminId =
       coreOnlyAdmin.id;
 
+    const nexusSocialApplication =
+      await prisma.application
+        .findUniqueOrThrow({
+          where: {
+            key: 'NEXUS_SOCIAL',
+          },
+          select: {
+            id: true,
+          },
+        });
+
+    await prisma.userApplicationAccess
+      .createMany({
+        data: [
+          {
+            userId: authorId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+          {
+            userId: otherUserId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+          {
+            userId: moderatorId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+          {
+            userId: adminId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+          {
+            userId: coreOnlyAdminId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+        ],
+        skipDuplicates: true,
+      });
     const authorLogin =
       await request(app.getHttpServer())
         .post('/api/auth/login')
@@ -336,6 +378,91 @@ describe('Permissions de modification des contenus (e2e)', () => {
       .expect(403);
   });
 
+  it('revoque immediatement l acces Posts et Comments en conservant le SocialProfile', async () => {
+    const nexusSocialApplication =
+      await prisma.application
+        .findUniqueOrThrow({
+          where: {
+            key: 'NEXUS_SOCIAL',
+          },
+          select: {
+            id: true,
+          },
+        });
+
+    const socialProfileBefore =
+      await prisma.socialProfile
+        .findUnique({
+          where: {
+            userId: authorId,
+          },
+          select: {
+            role: true,
+          },
+        });
+
+    expect(socialProfileBefore)
+      .toEqual({
+        role: 'USER',
+      });
+
+    await prisma.userApplicationAccess
+      .delete({
+        where: {
+          userId_applicationId: {
+            userId: authorId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+        },
+      });
+
+    try {
+      await request(app.getHttpServer())
+        .get('/api/posts')
+        .set(
+          'Authorization',
+          `Bearer ${authorAccessToken}`,
+        )
+        .expect(403);
+
+      await request(app.getHttpServer())
+        .get(
+          '/api/posts/00000000-0000-4000-8000-000000000000/comments',
+        )
+        .set(
+          'Authorization',
+          `Bearer ${authorAccessToken}`,
+        )
+        .expect(403);
+
+      const socialProfileAfter =
+        await prisma.socialProfile
+          .findUnique({
+            where: {
+              userId: authorId,
+            },
+            select: {
+              role: true,
+            },
+          });
+
+      expect(socialProfileAfter)
+        .toEqual({
+          role: 'USER',
+        });
+    }
+    finally {
+      await prisma.userApplicationAccess
+        .create({
+          data: {
+            userId: authorId,
+            applicationId:
+              nexusSocialApplication.id,
+          },
+        });
+    }
+  });
   it('applique correctement les droits de modification d un post et l audit ADMIN', async () => {
     const createResponse =
       await request(app.getHttpServer())

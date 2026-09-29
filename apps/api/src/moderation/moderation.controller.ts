@@ -7,6 +7,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SocialRole } from '@prisma/client';
+import { ApplicationAccessGuard } from '../applications/application-access.guard';
+import { RequireApplication } from '../applications/application-access.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SocialAccessGuard } from '../social/social-access.guard';
 import { SocialRoles } from '../social/social-roles.decorator';
@@ -14,8 +16,10 @@ import { SocialRolesGuard } from '../social/social-roles.guard';
 import { ModerationService } from './moderation.service';
 
 @Controller('moderation')
+@RequireApplication('NEXUS_SOCIAL')
 @UseGuards(
   JwtAuthGuard,
+  ApplicationAccessGuard,
   SocialAccessGuard,
   SocialRolesGuard,
 )

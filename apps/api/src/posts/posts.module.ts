@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ApplicationsModule } from '../applications/applications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SocialAccessGuard } from '../social/social-access.guard';
 import { PostsController } from './posts.controller';
@@ -7,6 +8,7 @@ import { PostsService } from './posts.service';
 @Module({
   imports: [
     PrismaModule,
+    ApplicationsModule,
   ],
   controllers: [
     PostsController,
