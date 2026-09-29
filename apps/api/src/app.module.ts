@@ -9,6 +9,7 @@ import { CommentsModule } from './comments/comments.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { ProfileModule } from './profile/profile.module';
 import { SecurityModule } from './security/security.module';
+import { ApplicationsModule } from './applications/applications.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule, } from '@nestjs/throttler';
 import { ConfigModule } from '@nestjs/config';
@@ -70,7 +71,7 @@ import * as Joi from 'joi';
       limit: 120,
     },
   ],
-}), PrismaModule, UsersModule, AuthModule, PostsModule, CommentsModule, ModerationModule, ProfileModule, SecurityModule,],
+}), PrismaModule, UsersModule, AuthModule, PostsModule, CommentsModule, ModerationModule, ProfileModule, SecurityModule, ApplicationsModule,],
   controllers: [AppController],
   providers: [ {
   provide: APP_GUARD,
