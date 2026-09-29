@@ -53,6 +53,14 @@ export class UsersController {
     );
   }
 
+  @UseGuards(
+    JwtAuthGuard,
+    PlatformRolesGuard,
+  )
+  @PlatformRoles(
+    PlatformRole.ADMIN,
+    PlatformRole.SUPER_ADMIN,
+  )
   @Post()
   create(
     @Body()
