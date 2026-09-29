@@ -71,8 +71,9 @@ model User {
   status       UserStatus   @default(ACTIVE)
   authVersion  Int          @default(0)
 
-  socialProfile SocialProfile?
-  posts        Post[]
+  socialProfile       SocialProfile?
+  applicationAccesses UserApplicationAccess[]
+  posts               Post[]
   comments     Comment[]
   moderationLogs ModerationLog[]
   refreshSessions  RefreshSession[]
@@ -97,6 +98,35 @@ model SocialProfile {
 
   @@index([role])
 }
+model Application {
+  id          String  @id @default(uuid())
+  key         String  @unique
+  name        String
+  description String?
+  enabled     Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  accesses UserApplicationAccess[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, sortOrder])
+}
+
+model UserApplicationAccess {
+  userId        String
+  applicationId String
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([userId, applicationId])
+  @@index([applicationId])
+}
+
 model Post {
   id        String    @id @default(uuid())
   content   String
