@@ -1,43 +1,88 @@
-import { Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import {
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { SocialRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Roles } from '../auth/roles.decorator';
-import { RolesGuard } from '../auth/roles.guard';
+import { SocialAccessGuard } from '../social/social-access.guard';
+import { SocialRoles } from '../social/social-roles.decorator';
+import { SocialRolesGuard } from '../social/social-roles.guard';
 import { ModerationService } from './moderation.service';
 
 @Controller('moderation')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(
+  JwtAuthGuard,
+  SocialAccessGuard,
+  SocialRolesGuard,
+)
 export class ModerationController {
-  constructor(private readonly moderationService: ModerationService) {}
+  constructor(
+    private readonly moderationService:
+      ModerationService,
+  ) {}
 
-  @Roles(UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @SocialRoles(
+    SocialRole.MODERATOR,
+    SocialRole.ADMIN,
+  )
   @Get('posts/deleted')
   findDeletedPosts() {
-    return this.moderationService.findDeletedPosts();
+    return this.moderationService
+      .findDeletedPosts();
   }
 
-  @Roles(UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @SocialRoles(
+    SocialRole.MODERATOR,
+    SocialRole.ADMIN,
+  )
   @Get('comments/deleted')
   findDeletedComments() {
-    return this.moderationService.findDeletedComments();
+    return this.moderationService
+      .findDeletedComments();
   }
 
-  @Roles(UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @SocialRoles(
+    SocialRole.MODERATOR,
+    SocialRole.ADMIN,
+  )
   @Patch('posts/:id/restore')
-  restorePost(@Param('id') id: string, @Req() req: any) {
-    return this.moderationService.restorePost(id, req.user);
+  restorePost(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    return this.moderationService
+      .restorePost(
+        id,
+        req.user,
+      );
   }
 
-  @Roles(UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @SocialRoles(
+    SocialRole.MODERATOR,
+    SocialRole.ADMIN,
+  )
   @Patch('comments/:id/restore')
-  restoreComment(@Param('id') id: string, @Req() req: any) {
-    return this.moderationService.restoreComment(id, req.user);
+  restoreComment(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    return this.moderationService
+      .restoreComment(
+        id,
+        req.user,
+      );
   }
 
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @SocialRoles(
+    SocialRole.ADMIN,
+  )
   @Get('logs')
   findLogs() {
-    return this.moderationService.findLogs();
+    return this.moderationService
+      .findLogs();
   }
-
 }

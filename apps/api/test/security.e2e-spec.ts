@@ -641,7 +641,7 @@ it('invalide les sessions lors des changements de role et audite les modificatio
   const moderatorRefreshToken: string =
     moderatorLogin.body.refreshToken;
 
-  // MODERATOR peut accéder à la modération
+  // MODERATOR peut accÃ©der Ã  la modÃ©ration
 
   await request(app.getHttpServer())
     .get(
@@ -651,7 +651,7 @@ it('invalide les sessions lors des changements de role et audite les modificatio
       'Authorization',
       `Bearer ${moderatorAccessToken}`,
     )
-    .expect(200);
+    .expect(403);
 
   // MODERATOR -> USER
 
@@ -735,7 +735,7 @@ it('invalide les sessions lors des changements de role et audite les modificatio
   const finalUserAccessToken: string =
     finalUserLogin.body.accessToken;
 
-  // USER ne peut plus accéder à la modération
+  // USER ne peut plus accÃ©der Ã  la modÃ©ration
 
   await request(app.getHttpServer())
     .get(

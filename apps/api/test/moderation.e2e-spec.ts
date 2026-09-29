@@ -26,6 +26,9 @@ const MODERATOR_EMAIL =
 const ADMIN_EMAIL =
   'e2e-moderation-admin@nexus.local';
 
+const CORE_ONLY_ADMIN_EMAIL =
+  'e2e-core-only-admin@nexus.local';
+
 const TEST_PASSWORD =
   'E2eModerationPassword123!';
 
@@ -36,10 +39,12 @@ describe('Moderation (e2e)', () => {
   let userId: string;
   let moderatorId: string;
   let adminId: string;
+  let coreOnlyAdminId: string;
 
   let userAccessToken: string;
   let moderatorAccessToken: string;
   let adminAccessToken: string;
+  let coreOnlyAdminAccessToken: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule =
@@ -60,6 +65,7 @@ describe('Moderation (e2e)', () => {
       USER_EMAIL,
       MODERATOR_EMAIL,
       ADMIN_EMAIL,
+      CORE_ONLY_ADMIN_EMAIL,
     ];
 
     const existingUsers =
@@ -140,6 +146,11 @@ describe('Moderation (e2e)', () => {
           firstName: 'E2E',
           lastName: 'ModerationUser',
           role: 'USER',
+          socialProfile: {
+            create: {
+              role: 'USER',
+            },
+          },
         },
       });
 
@@ -151,6 +162,11 @@ describe('Moderation (e2e)', () => {
           firstName: 'E2E',
           lastName: 'Moderator',
           role: 'MODERATOR',
+          socialProfile: {
+            create: {
+              role: 'MODERATOR',
+            },
+          },
         },
       });
 
@@ -162,12 +178,31 @@ describe('Moderation (e2e)', () => {
           firstName: 'E2E',
           lastName: 'ModerationAdmin',
           role: 'ADMIN',
+          socialProfile: {
+            create: {
+              role: 'ADMIN',
+            },
+          },
+        },
+      });
+
+    const coreOnlyAdmin =
+      await prisma.user.create({
+        data: {
+          email: CORE_ONLY_ADMIN_EMAIL,
+          passwordHash,
+          firstName: 'E2E',
+          lastName: 'CoreOnlyAdmin',
+          role: 'SUPER_ADMIN',
+          platformRole: 'SUPER_ADMIN',
         },
       });
 
     userId = user.id;
     moderatorId = moderator.id;
     adminId = admin.id;
+    coreOnlyAdminId =
+      coreOnlyAdmin.id;
 
     const userLogin =
       await request(app.getHttpServer())
@@ -193,6 +228,14 @@ describe('Moderation (e2e)', () => {
           password: TEST_PASSWORD,
         });
 
+    const coreOnlyAdminLogin =
+      await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: CORE_ONLY_ADMIN_EMAIL,
+          password: TEST_PASSWORD,
+        });
+
     expect([200, 201]).toContain(
       userLogin.status,
     );
@@ -205,6 +248,10 @@ describe('Moderation (e2e)', () => {
       adminLogin.status,
     );
 
+    expect([200, 201]).toContain(
+      coreOnlyAdminLogin.status,
+    );
+
     userAccessToken =
       userLogin.body.accessToken;
 
@@ -213,6 +260,9 @@ describe('Moderation (e2e)', () => {
 
     adminAccessToken =
       adminLogin.body.accessToken;
+
+    coreOnlyAdminAccessToken =
+      coreOnlyAdminLogin.body.accessToken;
   });
 
   it('refuse les contenus supprimes sans authentification', async () => {
@@ -243,6 +293,26 @@ describe('Moderation (e2e)', () => {
       .set(
         'Authorization',
         `Bearer ${userAccessToken}`,
+      )
+      .expect(403);
+  });
+
+  it('refuse un SUPER_ADMIN plateforme sans profil NEXUS Social', async () => {
+    await request(app.getHttpServer())
+      .get('/api/moderation/posts/deleted')
+      .set(
+        'Authorization',
+        `Bearer ${coreOnlyAdminAccessToken}`,
+      )
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .get(
+        '/api/moderation/comments/deleted',
+      )
+      .set(
+        'Authorization',
+        `Bearer ${coreOnlyAdminAccessToken}`,
       )
       .expect(403);
   });
@@ -291,7 +361,7 @@ describe('Moderation (e2e)', () => {
   const postContent =
     'Post e2e pour test de moderation';
 
-  // 1. USER crée un post
+  // 1. USER crÃ©e un post
 
   const createResponse =
     await request(app.getHttpServer())
@@ -314,7 +384,7 @@ describe('Moderation (e2e)', () => {
   expect(postId)
     .toBeDefined();
 
-  // 2. Vérifier que le post est accessible
+  // 2. VÃ©rifier que le post est accessible
 
   await request(app.getHttpServer())
     .get(`/api/posts/${postId}`)
@@ -338,7 +408,7 @@ describe('Moderation (e2e)', () => {
     deleteResponse.status,
   );
 
-  // 4. Le détail du post doit maintenant retourner 404
+  // 4. Le dÃ©tail du post doit maintenant retourner 404
 
   await request(app.getHttpServer())
     .get(`/api/posts/${postId}`)
@@ -348,7 +418,7 @@ describe('Moderation (e2e)', () => {
     )
     .expect(404);
 
-  // 5. Le post doit apparaître dans la liste des supprimés
+  // 5. Le post doit apparaÃ®tre dans la liste des supprimÃ©s
 
   const deletedPostsResponse =
     await request(app.getHttpServer())
@@ -371,7 +441,7 @@ describe('Moderation (e2e)', () => {
     ),
   ).toBe(true);
 
-  // 6. Vérifier le log POST_DELETE
+  // 6. VÃ©rifier le log POST_DELETE
 
   const deleteLog =
     await prisma.moderationLog.findFirst({
@@ -404,7 +474,7 @@ describe('Moderation (e2e)', () => {
   expect(restoreResponse.status)
     .toBe(200);
 
-  // 8. Le post doit être de nouveau accessible
+  // 8. Le post doit Ãªtre de nouveau accessible
 
   const restoredPostResponse =
     await request(app.getHttpServer())
@@ -421,7 +491,7 @@ describe('Moderation (e2e)', () => {
   expect(restoredPostResponse.body.content)
     .toBe(postContent);
 
-  // 9. Le post doit réapparaître dans le feed
+  // 9. Le post doit rÃ©apparaÃ®tre dans le feed
 
   const feedResponse =
     await request(app.getHttpServer())
@@ -444,7 +514,7 @@ describe('Moderation (e2e)', () => {
     ),
   ).toBe(true);
 
-  // 10. Vérifier le log POST_RESTORE
+  // 10. VÃ©rifier le log POST_RESTORE
 
   const restoreLog =
     await prisma.moderationLog.findFirst({
@@ -509,7 +579,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
   expect(commentId)
     .toBeDefined();
 
-  // Vérifier présence avant suppression
+  // VÃ©rifier prÃ©sence avant suppression
 
   const commentsBefore =
     await request(app.getHttpServer())
@@ -565,7 +635,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
     ),
   ).toBe(false);
 
-  // Absent aussi du détail du post
+  // Absent aussi du dÃ©tail du post
 
   const postDetailAfterDelete =
     await request(app.getHttpServer())
@@ -583,7 +653,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
     ),
   ).toBe(false);
 
-  // Visible côté modération
+  // Visible cÃ´tÃ© modÃ©ration
 
   const deletedCommentsResponse =
     await request(app.getHttpServer())
@@ -643,7 +713,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
   expect(restoreResponse.status)
     .toBe(200);
 
-  // Réapparition dans la liste
+  // RÃ©apparition dans la liste
 
   const commentsAfterRestore =
     await request(app.getHttpServer())
@@ -663,7 +733,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
     ),
   ).toBe(true);
 
-  // Réapparition dans le détail du post
+  // RÃ©apparition dans le dÃ©tail du post
 
   const postDetailAfterRestore =
     await request(app.getHttpServer())
@@ -708,6 +778,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
             userId,
             moderatorId,
             adminId,
+            coreOnlyAdminId,
           ],
         },
       },
@@ -722,6 +793,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
                 userId,
                 moderatorId,
                 adminId,
+                coreOnlyAdminId,
               ],
             },
           },
@@ -731,6 +803,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
                 userId,
                 moderatorId,
                 adminId,
+                coreOnlyAdminId,
               ],
             },
           },
@@ -745,6 +818,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
             userId,
             moderatorId,
             adminId,
+            coreOnlyAdminId,
           ],
         },
       },
@@ -757,6 +831,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
             userId,
             moderatorId,
             adminId,
+            coreOnlyAdminId,
           ],
         },
       },
@@ -769,6 +844,7 @@ it('gere le cycle complet de suppression et restauration d un commentaire', asyn
             userId,
             moderatorId,
             adminId,
+            coreOnlyAdminId,
           ],
         },
       },
