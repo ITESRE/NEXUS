@@ -55,6 +55,8 @@ enum SecurityAction {
   USER_STATUS_CHANGED
   USER_ROLE_CHANGED
   USER_PLATFORM_ROLE_CHANGED
+  USER_APPLICATION_ACCESS_GRANTED
+  USER_APPLICATION_ACCESS_REVOKED
   USER_PASSWORD_CHANGED
   USER_PASSWORD_RESET
   USER_EMAIL_CHANGED
@@ -239,6 +241,8 @@ model SecurityAuditLog {
   previousPlatformRole PlatformRole?
   newPlatformRole      PlatformRole?
 
+  applicationKey String?
+
   previousEmail  String?
   newEmail       String?
 
@@ -250,5 +254,6 @@ model SecurityAuditLog {
   @@index([actorId])
   @@index([targetUserId])
   @@index([action])
+  @@index([applicationKey])
   @@index([createdAt])
 }
