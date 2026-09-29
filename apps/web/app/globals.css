@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #05070d;
+  --foreground: #f8fafc;
 }
 
 @theme inline {
@@ -12,15 +12,178 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
 }
 
 body {
+  margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color:
+    transparent;
+}
+
+::selection {
+  background:
+    rgba(96, 165, 250, 0.35);
+}
+
+.nexus-shell {
+  --pointer-x: 0px;
+  --pointer-y: 0px;
+
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(
+      circle at 50% -15%,
+      rgba(59, 130, 246, 0.18),
+      transparent 34rem
+    ),
+    radial-gradient(
+      circle at 85% 80%,
+      rgba(124, 58, 237, 0.13),
+      transparent 32rem
+    ),
+    #05070d;
+}
+
+.nexus-shell::before {
+  content: "";
+  position: fixed;
+  z-index: -2;
+  inset: -15%;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 28% 35%,
+      rgba(59, 130, 246, 0.11),
+      transparent 16rem
+    ),
+    radial-gradient(
+      circle at 72% 62%,
+      rgba(139, 92, 246, 0.09),
+      transparent 18rem
+    );
+  transform:
+    translate3d(
+      var(--pointer-x),
+      var(--pointer-y),
+      0
+    );
+  transition:
+    transform 180ms ease-out;
+}
+
+.nexus-grid {
+  position: fixed;
+  z-index: -3;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.17;
+  background-image:
+    linear-gradient(
+      rgba(148, 163, 184, 0.09) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.09) 1px,
+      transparent 1px
+    );
+  background-size:
+    48px 48px;
+  mask-image:
+    radial-gradient(
+      circle at center,
+      black,
+      transparent 78%
+    );
+}
+
+.nexus-orbit {
+  position: fixed;
+  z-index: -1;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  pointer-events: none;
+  background:
+    rgba(147, 197, 253, 0.9);
+  box-shadow:
+    0 0 22px
+    rgba(96, 165, 250, 0.8);
+  animation:
+    nexusFloat 8s
+    ease-in-out infinite;
+}
+
+.nexus-orbit:nth-of-type(2) {
+  top: 18%;
+  left: 14%;
+}
+
+.nexus-orbit:nth-of-type(3) {
+  top: 28%;
+  right: 18%;
+  animation-delay: -2s;
+}
+
+.nexus-orbit:nth-of-type(4) {
+  right: 28%;
+  bottom: 19%;
+  animation-delay: -4s;
+}
+
+.nexus-orbit:nth-of-type(5) {
+  left: 22%;
+  bottom: 24%;
+  animation-delay: -6s;
+}
+
+@keyframes nexusFloat {
+  0%,
+  100% {
+    transform:
+      translate3d(0, 0, 0)
+      scale(1);
+    opacity: 0.45;
+  }
+
+  50% {
+    transform:
+      translate3d(0, -16px, 0)
+      scale(1.35);
+    opacity: 1;
+  }
+}
+
+@media (
+  prefers-reduced-motion:
+  reduce
+) {
+  .nexus-shell::before,
+  .nexus-orbit {
+    transition: none;
+    animation: none;
+  }
 }
