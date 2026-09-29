@@ -1,31 +1,66 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { PlatformRole } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UsersService } from './users.service';
-import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Roles } from '../auth/roles.decorator';
-import { RolesGuard } from '../auth/roles.guard';
-import { CurrentUserOrAdminGuard } from '../auth/current-user-or-admin.guard';
+import {
+  PlatformRoles,
+} from '../auth/platform-roles.decorator';
+import {
+  PlatformRolesGuard,
+} from '../auth/platform-roles.guard';
+import {
+  CurrentUserOrAdminGuard,
+} from '../auth/current-user-or-admin.guard';
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService:
+      UsersService,
+  ) {}
 
-    @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-    @Get()
-    findAll() {
+  @UseGuards(
+    JwtAuthGuard,
+    PlatformRolesGuard,
+  )
+  @PlatformRoles(
+    PlatformRole.ADMIN,
+    PlatformRole.SUPER_ADMIN,
+  )
+  @Get()
+  findAll() {
     return this.usersService.findAll();
-    }
+  }
 
-  @UseGuards(JwtAuthGuard, CurrentUserOrAdminGuard)
+  @UseGuards(
+    JwtAuthGuard,
+    CurrentUserOrAdminGuard,
+  )
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  findOne(
+    @Param('id') id: string,
+  ) {
+    return this.usersService.findOne(
+      id,
+    );
   }
 
   @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  create(
+    @Body()
+    createUserDto:
+      CreateUserDto,
+  ) {
+    return this.usersService.create(
+      createUserDto,
+    );
   }
 }

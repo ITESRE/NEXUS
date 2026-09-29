@@ -23,6 +23,12 @@ const USER_EMAIL =
 const ADMIN_EMAIL =
   'e2e-security-admin@nexus.local';
 
+const SUPER_ADMIN_EMAIL =
+  'e2e-security-super-admin@nexus.local';
+
+const LEGACY_ADMIN_EMAIL =
+  'e2e-security-legacy-admin@nexus.local';
+
 const USER_PASSWORD =
   'E2eUserPassword123!';
 
@@ -35,6 +41,8 @@ describe('Securite administrative (e2e)', () => {
 
   let userId: string;
   let adminId: string;
+  let superAdminId: string;
+  let legacyAdminId: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule =
@@ -58,6 +66,8 @@ describe('Securite administrative (e2e)', () => {
             in: [
               USER_EMAIL,
               ADMIN_EMAIL,
+              SUPER_ADMIN_EMAIL,
+              LEGACY_ADMIN_EMAIL,
             ],
           },
         },
@@ -114,6 +124,10 @@ describe('Securite administrative (e2e)', () => {
         },
       });
 
+    /*
+     * Preuve positive :
+     * legacy USER mais PlatformRole.ADMIN.
+     */
     const admin =
       await prisma.user.create({
         data: {
@@ -122,12 +136,49 @@ describe('Securite administrative (e2e)', () => {
             adminPasswordHash,
           firstName: 'E2E',
           lastName: 'SecurityAdmin',
+          role: 'USER',
+          platformRole: 'ADMIN',
+        },
+      });
+
+    /*
+     * SUPER_ADMIN plateforme avec
+     * rÃ´le legacy USER.
+     */
+    const superAdmin =
+      await prisma.user.create({
+        data: {
+          email: SUPER_ADMIN_EMAIL,
+          passwordHash:
+            adminPasswordHash,
+          firstName: 'E2E',
+          lastName: 'SecuritySuperAdmin',
+          role: 'USER',
+          platformRole: 'SUPER_ADMIN',
+        },
+      });
+
+    /*
+     * Preuve nÃ©gative :
+     * legacy ADMIN mais PlatformRole.USER.
+     */
+    const legacyAdmin =
+      await prisma.user.create({
+        data: {
+          email: LEGACY_ADMIN_EMAIL,
+          passwordHash:
+            adminPasswordHash,
+          firstName: 'E2E',
+          lastName: 'SecurityLegacyAdmin',
           role: 'ADMIN',
+          platformRole: 'USER',
         },
       });
 
     userId = user.id;
     adminId = admin.id;
+    superAdminId = superAdmin.id;
+    legacyAdminId = legacyAdmin.id;
   });
 
   it('permet a un ADMIN de revoquer toutes les sessions d un USER', async () => {
@@ -491,344 +542,475 @@ describe('Securite administrative (e2e)', () => {
   expect(reactivateAudit)
     .not.toBeNull();
 });
+  it('n accorde aucun privilege CORE a un ADMIN legacy sans PlatformRole', async () => {
+    const legacyAdminLogin =
+      await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: LEGACY_ADMIN_EMAIL,
+          password: ADMIN_PASSWORD,
+        });
 
-it('invalide les sessions lors des changements de role et audite les modifications', async () => {
-  await prisma.refreshSession.deleteMany({
-    where: {
-      userId,
-    },
-  });
-
-  await prisma.user.update({
-    where: {
-      id: userId,
-    },
-    data: {
-      role: 'USER',
-      status: 'ACTIVE',
-    },
-  });
-
-  const userLogin =
-    await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({
-        email: USER_EMAIL,
-        password: USER_PASSWORD,
-      });
-
-  expect([200, 201]).toContain(
-    userLogin.status,
-  );
-
-  const oldUserAccessToken: string =
-    userLogin.body.accessToken;
-
-  const oldUserRefreshToken: string =
-    userLogin.body.refreshToken;
-
-  const adminLogin =
-    await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({
-        email: ADMIN_EMAIL,
-        password: ADMIN_PASSWORD,
-      });
-
-  expect([200, 201]).toContain(
-    adminLogin.status,
-  );
-
-  const adminAccessToken: string =
-    adminLogin.body.accessToken;
-
-  const userBefore =
-    await prisma.user.findUniqueOrThrow({
-      where: {
-        id: userId,
-      },
-      select: {
-        role: true,
-        authVersion: true,
-      },
-    });
-
-  expect(userBefore.role)
-    .toBe('USER');
-
-  // USER -> MODERATOR
-
-  const promoteResponse =
-    await request(app.getHttpServer())
-      .patch(
-        `/api/security/users/${userId}/role`,
-      )
-      .set(
-        'Authorization',
-        `Bearer ${adminAccessToken}`,
-      )
-      .send({
-        role: 'MODERATOR',
-        reason:
-          'Test e2e de promotion vers MODERATOR',
-      });
-
-  expect(promoteResponse.status)
-    .toBe(200);
-
-  expect(promoteResponse.body.user.role)
-    .toBe('MODERATOR');
-
-  // Ancien refresh USER invalide
-
-  await request(app.getHttpServer())
-    .post('/api/auth/refresh')
-    .send({
-      refreshToken:
-        oldUserRefreshToken,
-    })
-    .expect(401);
-
-  // Ancien access USER invalide
-
-  await request(app.getHttpServer())
-    .get('/api/auth/me')
-    .set(
-      'Authorization',
-      `Bearer ${oldUserAccessToken}`,
-    )
-    .expect(401);
-
-  const promotedUser =
-    await prisma.user.findUniqueOrThrow({
-      where: {
-        id: userId,
-      },
-      select: {
-        role: true,
-        authVersion: true,
-      },
-    });
-
-  expect(promotedUser.role)
-    .toBe('MODERATOR');
-
-  expect(promotedUser.authVersion)
-    .toBe(
-      userBefore.authVersion + 1,
+    expect([200, 201]).toContain(
+      legacyAdminLogin.status,
     );
 
-  // Nouveau login MODERATOR
+    expect(
+      legacyAdminLogin.body.user.role,
+    ).toBe('ADMIN');
 
-  const moderatorLogin =
+    expect(
+      legacyAdminLogin.body.user.platformRole,
+    ).toBe('USER');
+
+    const legacyAccessToken: string =
+      legacyAdminLogin.body.accessToken;
+
     await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({
-        email: USER_EMAIL,
-        password: USER_PASSWORD,
-      });
+      .get('/api/users')
+      .set(
+        'Authorization',
+        `Bearer ${legacyAccessToken}`,
+      )
+      .expect(403);
 
-  expect([200, 201]).toContain(
-    moderatorLogin.status,
-  );
-
-  expect(moderatorLogin.body.user.role)
-    .toBe('MODERATOR');
-
-  const moderatorAccessToken: string =
-    moderatorLogin.body.accessToken;
-
-  const moderatorRefreshToken: string =
-    moderatorLogin.body.refreshToken;
-
-  // MODERATOR peut accÃ©der Ã  la modÃ©ration
-
-  await request(app.getHttpServer())
-    .get(
-      '/api/moderation/posts/deleted',
-    )
-    .set(
-      'Authorization',
-      `Bearer ${moderatorAccessToken}`,
-    )
-    .expect(403);
-
-  // MODERATOR -> USER
-
-  const demoteResponse =
     await request(app.getHttpServer())
-      .patch(
-        `/api/security/users/${userId}/role`,
+      .get('/api/security/audit-logs')
+      .set(
+        'Authorization',
+        `Bearer ${legacyAccessToken}`,
+      )
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post(
+        `/api/auth/users/${userId}/logout-all`,
       )
       .set(
         'Authorization',
-        `Bearer ${adminAccessToken}`,
+        `Bearer ${legacyAccessToken}`,
       )
-      .send({
+      .expect(403);
+  });
+
+  it('invalide les sessions lors des changements de PlatformRole et audite les modifications', async () => {
+    await prisma.refreshSession.deleteMany({
+      where: {
+        userId,
+      },
+    });
+
+    await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
         role: 'USER',
-        reason:
-          'Test e2e de retour vers USER',
-      });
-
-  expect(demoteResponse.status)
-    .toBe(200);
-
-  expect(demoteResponse.body.user.role)
-    .toBe('USER');
-
-  // Ancien refresh MODERATOR invalide
-
-  await request(app.getHttpServer())
-    .post('/api/auth/refresh')
-    .send({
-      refreshToken:
-        moderatorRefreshToken,
-    })
-    .expect(401);
-
-  // Ancien access MODERATOR invalide
-
-  await request(app.getHttpServer())
-    .get('/api/auth/me')
-    .set(
-      'Authorization',
-      `Bearer ${moderatorAccessToken}`,
-    )
-    .expect(401);
-
-  const demotedUser =
-    await prisma.user.findUniqueOrThrow({
-      where: {
-        id: userId,
-      },
-      select: {
-        role: true,
-        authVersion: true,
+        platformRole: 'USER',
+        status: 'ACTIVE',
       },
     });
 
-  expect(demotedUser.role)
-    .toBe('USER');
+    const userLogin =
+      await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: USER_EMAIL,
+          password: USER_PASSWORD,
+        });
 
-  expect(demotedUser.authVersion)
-    .toBe(
-      userBefore.authVersion + 2,
+    expect([200, 201]).toContain(
+      userLogin.status,
     );
 
-  // Nouveau login final USER
+    expect(
+      userLogin.body.user.role,
+    ).toBe('USER');
 
-  const finalUserLogin =
+    expect(
+      userLogin.body.user.platformRole,
+    ).toBe('USER');
+
+    const oldUserAccessToken: string =
+      userLogin.body.accessToken;
+
+    const oldUserRefreshToken: string =
+      userLogin.body.refreshToken;
+
+    /*
+     * ADMIN plateforme :
+     * administration courante oui,
+     * dÃ©lÃ©gation ADMIN non.
+     */
+    const adminLogin =
+      await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: ADMIN_EMAIL,
+          password: ADMIN_PASSWORD,
+        });
+
+    expect([200, 201]).toContain(
+      adminLogin.status,
+    );
+
+    expect(
+      adminLogin.body.user.role,
+    ).toBe('USER');
+
+    expect(
+      adminLogin.body.user.platformRole,
+    ).toBe('ADMIN');
+
+    const adminAccessToken: string =
+      adminLogin.body.accessToken;
+
     await request(app.getHttpServer())
-      .post('/api/auth/login')
+      .patch(
+        `/api/security/users/${userId}/platform-role`,
+      )
+      .set(
+        'Authorization',
+        `Bearer ${adminAccessToken}`,
+      )
       .send({
-        email: USER_EMAIL,
-        password: USER_PASSWORD,
+        platformRole: 'ADMIN',
+        reason:
+          'Tentative ADMIN interdite',
+      })
+      .expect(403);
+
+    const superAdminLogin =
+      await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: SUPER_ADMIN_EMAIL,
+          password: ADMIN_PASSWORD,
+        });
+
+    expect([200, 201]).toContain(
+      superAdminLogin.status,
+    );
+
+    expect(
+      superAdminLogin.body.user.role,
+    ).toBe('USER');
+
+    expect(
+      superAdminLogin.body.user.platformRole,
+    ).toBe('SUPER_ADMIN');
+
+    const superAdminAccessToken: string =
+      superAdminLogin.body.accessToken;
+
+    const userBefore =
+      await prisma.user.findUniqueOrThrow({
+        where: {
+          id: userId,
+        },
+        select: {
+          role: true,
+          platformRole: true,
+          authVersion: true,
+        },
       });
 
-  expect([200, 201]).toContain(
-    finalUserLogin.status,
-  );
+    expect(userBefore.role)
+      .toBe('USER');
 
-  expect(finalUserLogin.body.user.role)
-    .toBe('USER');
+    expect(userBefore.platformRole)
+      .toBe('USER');
 
-  const finalUserAccessToken: string =
-    finalUserLogin.body.accessToken;
+    // PlatformRole.USER -> ADMIN
 
-  // USER ne peut plus accÃ©der Ã  la modÃ©ration
+    const promoteResponse =
+      await request(app.getHttpServer())
+        .patch(
+          `/api/security/users/${userId}/platform-role`,
+        )
+        .set(
+          'Authorization',
+          `Bearer ${superAdminAccessToken}`,
+        )
+        .send({
+          platformRole: 'ADMIN',
+          reason:
+            'Test e2e de promotion plateforme vers ADMIN',
+        });
 
-  await request(app.getHttpServer())
-    .get(
-      '/api/moderation/posts/deleted',
-    )
-    .set(
-      'Authorization',
-      `Bearer ${finalUserAccessToken}`,
-    )
-    .expect(403);
+    expect(promoteResponse.status)
+      .toBe(200);
 
-  // Audit USER -> MODERATOR
+    expect(
+      promoteResponse.body.user.platformRole,
+    ).toBe('ADMIN');
 
-  const promotionAudit =
-    await prisma.securityAuditLog.findFirst({
-      where: {
-        action:
-          'USER_ROLE_CHANGED',
-        actorId: adminId,
-        targetUserId: userId,
-        previousRole: 'USER',
-        newRole: 'MODERATOR',
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    /*
+     * Le rÃ´le legacy n'est jamais
+     * modifiÃ© par cette route.
+     */
+    expect(
+      promoteResponse.body.user.role,
+    ).toBe('USER');
 
-  expect(promotionAudit)
-    .not.toBeNull();
+    // Anciens tokens invalidÃ©s
 
-  expect(promotionAudit?.reason)
-    .toBe(
-      'Test e2e de promotion vers MODERATOR',
+    await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({
+        refreshToken:
+          oldUserRefreshToken,
+      })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set(
+        'Authorization',
+        `Bearer ${oldUserAccessToken}`,
+      )
+      .expect(401);
+
+    const promotedUser =
+      await prisma.user.findUniqueOrThrow({
+        where: {
+          id: userId,
+        },
+        select: {
+          role: true,
+          platformRole: true,
+          authVersion: true,
+        },
+      });
+
+    expect(promotedUser.role)
+      .toBe('USER');
+
+    expect(promotedUser.platformRole)
+      .toBe('ADMIN');
+
+    expect(promotedUser.authVersion)
+      .toBe(
+        userBefore.authVersion + 1,
+      );
+
+    // Nouveau login Platform ADMIN
+
+    const promotedLogin =
+      await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: USER_EMAIL,
+          password: USER_PASSWORD,
+        });
+
+    expect([200, 201]).toContain(
+      promotedLogin.status,
     );
 
-  // Audit MODERATOR -> USER
+    expect(
+      promotedLogin.body.user.role,
+    ).toBe('USER');
 
-  const demotionAudit =
-    await prisma.securityAuditLog.findFirst({
-      where: {
-        action:
-          'USER_ROLE_CHANGED',
-        actorId: adminId,
-        targetUserId: userId,
-        previousRole: 'MODERATOR',
-        newRole: 'USER',
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    expect(
+      promotedLogin.body.user.platformRole,
+    ).toBe('ADMIN');
 
-  expect(demotionAudit)
-    .not.toBeNull();
+    const promotedAccessToken: string =
+      promotedLogin.body.accessToken;
 
-  expect(demotionAudit?.reason)
-    .toBe(
-      'Test e2e de retour vers USER',
+    const promotedRefreshToken: string =
+      promotedLogin.body.refreshToken;
+
+    /*
+     * Le PlatformRole.ADMIN permet bien
+     * l'administration CORE...
+     */
+    await request(app.getHttpServer())
+      .get('/api/users')
+      .set(
+        'Authorization',
+        `Bearer ${promotedAccessToken}`,
+      )
+      .expect(200);
+
+    /*
+     * ...mais ne donne aucun droit
+     * NEXUS Social.
+     */
+    await request(app.getHttpServer())
+      .get(
+        '/api/moderation/posts/deleted',
+      )
+      .set(
+        'Authorization',
+        `Bearer ${promotedAccessToken}`,
+      )
+      .expect(403);
+
+    // PlatformRole.ADMIN -> USER
+
+    const demoteResponse =
+      await request(app.getHttpServer())
+        .patch(
+          `/api/security/users/${userId}/platform-role`,
+        )
+        .set(
+          'Authorization',
+          `Bearer ${superAdminAccessToken}`,
+        )
+        .send({
+          platformRole: 'USER',
+          reason:
+            'Test e2e de retour plateforme vers USER',
+        });
+
+    expect(demoteResponse.status)
+      .toBe(200);
+
+    expect(
+      demoteResponse.body.user.platformRole,
+    ).toBe('USER');
+
+    expect(
+      demoteResponse.body.user.role,
+    ).toBe('USER');
+
+    // Tokens du Platform ADMIN invalidÃ©s
+
+    await request(app.getHttpServer())
+      .post('/api/auth/refresh')
+      .send({
+        refreshToken:
+          promotedRefreshToken,
+      })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set(
+        'Authorization',
+        `Bearer ${promotedAccessToken}`,
+      )
+      .expect(401);
+
+    const demotedUser =
+      await prisma.user.findUniqueOrThrow({
+        where: {
+          id: userId,
+        },
+        select: {
+          role: true,
+          platformRole: true,
+          authVersion: true,
+        },
+      });
+
+    expect(demotedUser.role)
+      .toBe('USER');
+
+    expect(demotedUser.platformRole)
+      .toBe('USER');
+
+    expect(demotedUser.authVersion)
+      .toBe(
+        userBefore.authVersion + 2,
+      );
+
+
+    const promotionAudit =
+      await prisma.securityAuditLog.findFirst({
+        where: {
+          action:
+            'USER_PLATFORM_ROLE_CHANGED',
+          actorId:
+            superAdminId,
+          targetUserId:
+            userId,
+          previousPlatformRole:
+            'USER',
+          newPlatformRole:
+            'ADMIN',
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+    expect(promotionAudit)
+      .not.toBeNull();
+
+    expect(
+      promotionAudit?.reason,
+    ).toBe(
+      'Test e2e de promotion plateforme vers ADMIN',
     );
-});
 
+    const demotionAudit =
+      await prisma.securityAuditLog.findFirst({
+        where: {
+          action:
+            'USER_PLATFORM_ROLE_CHANGED',
+          actorId:
+            superAdminId,
+          targetUserId:
+            userId,
+          previousPlatformRole:
+            'ADMIN',
+          newPlatformRole:
+            'USER',
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+    expect(demotionAudit)
+      .not.toBeNull();
+
+    expect(
+      demotionAudit?.reason,
+    ).toBe(
+      'Test e2e de retour plateforme vers USER',
+    );
+  });
   afterAll(async () => {
+    const testIds = [
+      adminId,
+      legacyAdminId,
+      superAdminId,
+      userId,
+    ];
+
     await prisma.securityAuditLog.deleteMany({
       where: {
         OR: [
           {
             actorId: {
-              in: [
-                adminId,
-                userId,
-              ],
+              in: testIds,
             },
           },
           {
             targetUserId: {
-              in: [
-                adminId,
-                userId,
-              ],
+              in: testIds,
             },
           },
         ],
       },
     });
 
+    await prisma.refreshSession.deleteMany({
+      where: {
+        userId: {
+          in: testIds,
+        },
+      },
+    });
+
     await prisma.user.deleteMany({
       where: {
         id: {
-          in: [
-            adminId,
-            userId,
-          ],
+          in: testIds,
         },
       },
     });

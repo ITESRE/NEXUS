@@ -1,71 +1,103 @@
-import { Body, Controller, Get, Param, Patch, Req, UseGuards, } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { PlatformRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Roles } from '../auth/roles.decorator';
-import { RolesGuard } from '../auth/roles.guard';
+import {
+  PlatformRoles,
+} from '../auth/platform-roles.decorator';
+import {
+  PlatformRolesGuard,
+} from '../auth/platform-roles.guard';
 import { SecurityService } from './security.service';
-import { UpdateUserStatusDto } from './dto/update-user-status.dto';
-import { UpdateUserRoleDto } from './dto/update-user-role.dto';
-
+import {
+  UpdateUserStatusDto,
+} from './dto/update-user-status.dto';
+import {
+  UpdateUserPlatformRoleDto,
+} from './dto/update-user-platform-role.dto';
 
 type RequestWithUser = {
   user: {
     userId: string;
-    role: UserRole;
+    platformRole: PlatformRole;
   };
 };
 
 @Controller('security')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(
+  JwtAuthGuard,
+  PlatformRolesGuard,
+)
 export class SecurityController {
   constructor(
-    private readonly securityService: SecurityService,
+    private readonly securityService:
+      SecurityService,
   ) {}
 
-  @Roles(
-    UserRole.ADMIN,
-    UserRole.SUPER_ADMIN,
+  @PlatformRoles(
+    PlatformRole.ADMIN,
+    PlatformRole.SUPER_ADMIN,
   )
   @Get('audit-logs')
   findAuditLogs() {
-    return this.securityService.findAuditLogs();
+    return this.securityService
+      .findAuditLogs();
   }
 
-  @Roles(
-  UserRole.ADMIN,
-  UserRole.SUPER_ADMIN,
-)
-
-  @Patch('users/:userId/status')
-    updateUserStatus(
-  @Param('userId') userId: string,
-  @Body()
-  updateUserStatusDto: UpdateUserStatusDto,
-  @Req() req: RequestWithUser,
-  ) {
-  return this.securityService.updateUserStatus(
-    userId,
-    req.user,
-    updateUserStatusDto,
-  );
-}
-
-  @Roles(
-    UserRole.ADMIN,
-    UserRole.SUPER_ADMIN,
+  @PlatformRoles(
+    PlatformRole.ADMIN,
+    PlatformRole.SUPER_ADMIN,
   )
-  @Patch('users/:userId/role')
-  updateUserRole(
-    @Param('userId') userId: string,
+  @Patch('users/:userId/status')
+  updateUserStatus(
+    @Param('userId')
+    userId: string,
     @Body()
-    updateUserRoleDto: UpdateUserRoleDto,
-    @Req() req: RequestWithUser,
+    updateUserStatusDto:
+      UpdateUserStatusDto,
+    @Req()
+    req: RequestWithUser,
   ) {
-    return this.securityService.updateUserRole(
-      userId,
-      req.user,
-      updateUserRoleDto,
-    );
+    return this.securityService
+      .updateUserStatus(
+        userId,
+        req.user,
+        updateUserStatusDto,
+      );
   }
 
+  /*
+   * Seul SUPER_ADMIN peut
+   * promouvoir/dégrader un rôle
+   * plateforme.
+   */
+  @PlatformRoles(
+    PlatformRole.SUPER_ADMIN,
+  )
+  @Patch(
+    'users/:userId/platform-role',
+  )
+  updateUserPlatformRole(
+    @Param('userId')
+    userId: string,
+    @Body()
+    updateUserPlatformRoleDto:
+      UpdateUserPlatformRoleDto,
+    @Req()
+    req: RequestWithUser,
+  ) {
+    return this.securityService
+      .updateUserPlatformRole(
+        userId,
+        req.user,
+        updateUserPlatformRoleDto,
+      );
+  }
 }

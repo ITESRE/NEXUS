@@ -6,7 +6,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { PlatformRole } from '@prisma/client';
 
 type RequestWithUser = {
   params?: {
@@ -15,34 +15,56 @@ type RequestWithUser = {
   user?: {
     userId: string;
     email: string;
-    role: UserRole;
+    platformRole: PlatformRole;
   };
 };
 
 @Injectable()
-export class CurrentUserOrAdminGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<RequestWithUser>();
+export class CurrentUserOrAdminGuard
+  implements CanActivate
+{
+  canActivate(
+    context: ExecutionContext,
+  ): boolean {
+    const request =
+      context.switchToHttp()
+        .getRequest<RequestWithUser>();
 
-    const currentUser = request.user;
-    const targetUserId = request.params?.id;
+    const currentUser =
+      request.user;
+
+    const targetUserId =
+      request.params?.id;
 
     if (!currentUser) {
-      throw new UnauthorizedException('Utilisateur non authentifié');
+      throw new UnauthorizedException(
+        'Utilisateur non authentifié',
+      );
     }
 
     if (!targetUserId) {
-      throw new BadRequestException('Identifiant utilisateur manquant');
+      throw new BadRequestException(
+        'Identifiant utilisateur manquant',
+      );
     }
 
-    const isAdmin =
-      currentUser.role === UserRole.ADMIN ||
-      currentUser.role === UserRole.SUPER_ADMIN;
+    const isPlatformAdmin =
+      currentUser.platformRole ===
+        PlatformRole.ADMIN ||
+      currentUser.platformRole ===
+        PlatformRole.SUPER_ADMIN;
 
-    const isCurrentUser = currentUser.userId === targetUserId;
+    const isCurrentUser =
+      currentUser.userId ===
+      targetUserId;
 
-    if (!isAdmin && !isCurrentUser) {
-      throw new ForbiddenException('Accès interdit');
+    if (
+      !isPlatformAdmin &&
+      !isCurrentUser
+    ) {
+      throw new ForbiddenException(
+        'Accès interdit',
+      );
     }
 
     return true;

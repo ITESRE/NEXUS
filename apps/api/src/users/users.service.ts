@@ -1,18 +1,31 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { hashPassword } from '../security/password.security';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:
+      PrismaService,
+  ) {}
 
   private readonly safeUserSelect = {
     id: true,
     email: true,
     firstName: true,
     lastName: true,
+
+    // Legacy conservé temporairement
     role: true,
+
+    // Autorité plateforme.
+    platformRole: true,
+
     status: true,
     createdAt: true,
     updatedAt: true,
@@ -27,55 +40,91 @@ export class UsersService {
     });
   }
 
-  async findOne(id: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: this.safeUserSelect,
-    });
+  async findOne(
+    id: string,
+  ) {
+    const user =
+      await this.prisma.user.findUnique({
+        where: {
+          id,
+        },
+        select:
+          this.safeUserSelect,
+      });
 
     if (!user) {
-      throw new NotFoundException('Utilisateur introuvable');
+      throw new NotFoundException(
+        'Utilisateur introuvable',
+      );
     }
 
     return user;
   }
 
-    async create(createUserDto: CreateUserDto) {
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: createUserDto.email },
-    });
+  async create(
+    createUserDto:
+      CreateUserDto,
+  ) {
+    const existingUser =
+      await this.prisma.user.findUnique({
+        where: {
+          email:
+            createUserDto.email,
+        },
+      });
 
     if (existingUser) {
-      throw new ConflictException('Un utilisateur avec cet email existe déjà');
+      throw new ConflictException(
+        'Un utilisateur avec cet email existe déjà',
+      );
     }
 
-    const passwordHash = await hashPassword(createUserDto.password);
+    const passwordHash =
+      await hashPassword(
+        createUserDto.password,
+      );
 
+    /*
+     * Un utilisateur CORE nouvellement créé :
+     * - PlatformRole.USER par défaut
+     * - aucun SocialProfile automatique
+     */
     return this.prisma.user.create({
       data: {
-        email: createUserDto.email,
+        email:
+          createUserDto.email,
         passwordHash,
-        firstName: createUserDto.firstName,
-        lastName: createUserDto.lastName,
+        firstName:
+          createUserDto.firstName,
+        lastName:
+          createUserDto.lastName,
       },
-      select: this.safeUserSelect,
+      select:
+        this.safeUserSelect,
     });
   }
 
-  async findByEmailForAuth(email: string) {
-  return this.prisma.user.findUnique({
-    where: { email },
-  });
+  async findByEmailForAuth(
+    email: string,
+  ) {
+    return this.prisma.user.findUnique({
+      where: {
+        email,
+      },
+    });
   }
 
-  async findByIdForAuth(id: string) {
-  return this.prisma.user.findUnique({
-    where: { id },
-    select: {
-      ...this.safeUserSelect,
-      authVersion: true,
-    },
-  });
+  async findByIdForAuth(
+    id: string,
+  ) {
+    return this.prisma.user.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        ...this.safeUserSelect,
+        authVersion: true,
+      },
+    });
   }
-
 }

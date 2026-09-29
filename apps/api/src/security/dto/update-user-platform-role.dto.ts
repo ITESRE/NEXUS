@@ -5,14 +5,16 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
-import { UserRole } from '@prisma/client';
+import { PlatformRole } from '@prisma/client';
 
-export class UpdateUserRoleDto {
-  @IsEnum(UserRole)
-  role!: UserRole;
+export class UpdateUserPlatformRoleDto {
+  @IsEnum(PlatformRole)
+  platformRole!: PlatformRole;
 
   @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim() : value,
+    typeof value === 'string'
+      ? value.trim()
+      : value,
   )
   @IsString()
   @IsNotEmpty()

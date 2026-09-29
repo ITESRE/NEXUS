@@ -1,11 +1,11 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { verifyPassword, hashPassword, } from '../security/password.security';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { SecurityAction, UserStatus } from '@prisma/client';
+import { PlatformRole, SecurityAction, UserStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '../mail/mail.service';
 import {
@@ -51,7 +51,13 @@ export class AuthService {
     const payload = {
     sub: user.id,
     email: user.email,
+
+    // Legacy temporaire
     role: user.role,
+
+    // Role CORE
+    platformRole: user.platformRole,
+
     authVersion: user.authVersion,
     };
 
@@ -98,6 +104,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        platformRole: user.platformRole,
         status: user.status,
       },
     };
@@ -409,8 +416,16 @@ async refresh(refreshToken: string) {
   const payload = {
     sub: session.user.id,
     email: session.user.email,
+
+    // Legacy temporaire
     role: session.user.role,
-    authVersion: session.user.authVersion,
+
+    // Role CORE
+    platformRole:
+      session.user.platformRole,
+
+    authVersion:
+      session.user.authVersion,
   };
 
   const jwtOptions: JwtSignOptions = {
@@ -585,63 +600,103 @@ async revokeSession(
 
 async logoutAllForUser(
   userId: string,
-  actorId: string,
+  actor: {
+    userId: string;
+    platformRole: PlatformRole;
+  },
 ) {
+  if (actor.userId === userId) {
+    throw new ForbiddenException(
+      'Utilisez la route personnelle pour d\u00e9connecter vos propres sessions',
+    );
+  }
+
+  if (
+    actor.platformRole !==
+      PlatformRole.ADMIN &&
+    actor.platformRole !==
+      PlatformRole.SUPER_ADMIN
+  ) {
+    throw new ForbiddenException(
+      'Acc\u00e8s interdit',
+    );
+  }
+
   const now = new Date();
 
-  return this.prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({
-      where: {
-        id: userId,
-      },
-      select: {
-        id: true,
-      },
-    });
+  return this.prisma.$transaction(
+    async (tx) => {
+      const targetUser =
+        await tx.user.findUnique({
+          where: {
+            id: userId,
+          },
+          select: {
+            id: true,
+            platformRole: true,
+          },
+        });
 
-    if (!user) {
-      throw new NotFoundException(
-        'Utilisateur introuvable',
-      );
-    }
+      if (!targetUser) {
+        throw new NotFoundException(
+          'Utilisateur introuvable',
+        );
+      }
 
-    const result = await tx.refreshSession.updateMany({
-      where: {
-        userId,
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: now,
-        lastUsedAt: now,
-      },
-    });
+      if (
+        actor.platformRole ===
+          PlatformRole.ADMIN &&
+        targetUser.platformRole !==
+          PlatformRole.USER
+      ) {
+        throw new ForbiddenException(
+          'Un ADMIN ne peut d\u00e9connecter administrativement que les comptes USER',
+        );
+      }
 
-    await tx.user.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        authVersion: {
-          increment: 1,
+      const result =
+        await tx.refreshSession
+          .updateMany({
+            where: {
+              userId,
+              revokedAt: null,
+            },
+            data: {
+              revokedAt: now,
+              lastUsedAt: now,
+            },
+          });
+
+      await tx.user.update({
+        where: {
+          id: userId,
         },
-      },
-    });
+        data: {
+          authVersion: {
+            increment: 1,
+          },
+        },
+      });
 
-    await tx.securityAuditLog.create({
-      data: {
-        action:
-          SecurityAction.USER_SESSIONS_REVOKED,
-        actorId,
-        targetUserId: userId,
-      },
-    });
+      await tx.securityAuditLog.create({
+        data: {
+          action:
+            SecurityAction.USER_SESSIONS_REVOKED,
+          actorId:
+            actor.userId,
+          targetUserId:
+            userId,
+        },
+      });
 
-    return {
-      message:
-        'Toutes les sessions du compte ont été déconnectées',
-      revokedSessions: result.count,
-    };
-  });
+      return {
+        message:
+          'Toutes les sessions du compte ont \u00e9t\u00e9 d\u00e9connect\u00e9es',
+        revokedSessions:
+          result.count,
+      };
+    },
+  );
 }
 
 }
