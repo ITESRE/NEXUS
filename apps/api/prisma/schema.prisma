@@ -54,6 +54,7 @@ enum SecurityAction {
   USER_SESSIONS_REVOKED
   USER_STATUS_CHANGED
   USER_ROLE_CHANGED
+  USER_PLATFORM_ROLE_CHANGED
   USER_PASSWORD_CHANGED
   USER_PASSWORD_RESET
   USER_EMAIL_CHANGED
@@ -202,8 +203,11 @@ model SecurityAuditLog {
   previousStatus UserStatus?
   newStatus      UserStatus?
 
-  previousRole   UserRole?
-  newRole        UserRole?
+  previousRole         UserRole?
+  newRole              UserRole?
+
+  previousPlatformRole PlatformRole?
+  newPlatformRole      PlatformRole?
 
   previousEmail  String?
   newEmail       String?
