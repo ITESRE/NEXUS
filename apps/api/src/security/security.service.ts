@@ -143,6 +143,22 @@ export class SecurityService {
         }
 
         /*
+         * Un SUPER_ADMIN est hors du cycle
+         * normal d'administration.
+         *
+         * Meme un autre SUPER_ADMIN ne peut
+         * pas modifier son statut par cette route.
+         */
+        if (
+          targetUser.platformRole ===
+          PlatformRole.SUPER_ADMIN
+        ) {
+          throw new ForbiddenException(
+            'Le statut d\u2019un SUPER_ADMIN ne peut pas etre modifie par cette route',
+          );
+        }
+
+        /*
          * ADMIN ne peut administrer
          * que PlatformRole.USER.
          */

@@ -643,6 +643,20 @@ async logoutAllForUser(
         );
       }
 
+      /*
+       * Les sessions d'un SUPER_ADMIN ne
+       * peuvent pas etre revoquees par la
+       * route administrative normale.
+       */
+      if (
+        targetUser.platformRole ===
+        PlatformRole.SUPER_ADMIN
+      ) {
+        throw new ForbiddenException(
+          'Les sessions d\u2019un SUPER_ADMIN ne peuvent pas etre revoquees par cette route',
+        );
+      }
+
       if (
         actor.platformRole ===
           PlatformRole.ADMIN &&

@@ -16,6 +16,7 @@ import { hashPassword } from '../src/security/password.security';
 import { AppModule } from '../src/app.module';
 import { setupApp } from '../src/app.setup';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { AuthService } from '../src/auth/auth.service';
 
 const USER_EMAIL =
   'e2e-security-user@nexus.local';
@@ -973,6 +974,225 @@ describe('Securite administrative (e2e)', () => {
     ).toBe(
       'Test e2e de retour plateforme vers USER',
     );
+  });
+  it('protege un SUPER_ADMIN contre les routes administratives normales', async () => {
+    const protectedEmail =
+      'e2e-security-protected-super-admin@nexus.local';
+
+    const existingProtected =
+      await prisma.user.findUnique({
+        where: {
+          email: protectedEmail,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    if (existingProtected) {
+      await prisma.securityAuditLog
+        .deleteMany({
+          where: {
+            OR: [
+              {
+                actorId:
+                  existingProtected.id,
+              },
+              {
+                targetUserId:
+                  existingProtected.id,
+              },
+            ],
+          },
+        });
+
+      await prisma.refreshSession
+        .deleteMany({
+          where: {
+            userId:
+              existingProtected.id,
+          },
+        });
+
+      await prisma.user.delete({
+        where: {
+          id:
+            existingProtected.id,
+        },
+      });
+    }
+
+    const protectedSuperAdmin =
+      await prisma.user.create({
+        data: {
+          email: protectedEmail,
+
+          /*
+           * Ce compte cible ne se connecte jamais
+           * pendant ce test.
+           */
+          passwordHash:
+            'e2e-not-used',
+
+          firstName:
+            'E2E',
+          lastName:
+            'ProtectedSuperAdmin',
+
+          role:
+            'USER',
+
+          platformRole:
+            'SUPER_ADMIN',
+        },
+        select: {
+          id: true,
+          platformRole: true,
+          status: true,
+          authVersion: true,
+        },
+      });
+
+    try {
+      expect(
+        protectedSuperAdmin.platformRole,
+      ).toBe('SUPER_ADMIN');
+
+      /*
+       * On teste ici la hierarchie d'autorisation,
+       * pas le throttling de /auth/login.
+       *
+       * AuthService.login reutilise la vraie logique
+       * d'authentification et de creation des tokens,
+       * mais sans traverser le ThrottlerGuard HTTP.
+       */
+      const authService =
+        app.get(AuthService);
+
+      const superAdminLogin =
+        await authService.login({
+          email:
+            SUPER_ADMIN_EMAIL,
+          password:
+            ADMIN_PASSWORD,
+        });
+
+      const superAdminAccessToken:
+        string =
+        superAdminLogin.accessToken;
+
+      /*
+       * 1. Meme un SUPER_ADMIN ne peut pas
+       * desactiver un autre SUPER_ADMIN
+       * via la route administrative normale.
+       */
+      await request(app.getHttpServer())
+        .patch(
+          `/api/security/users/${protectedSuperAdmin.id}/status`,
+        )
+        .set(
+          'Authorization',
+          `Bearer ${superAdminAccessToken}`,
+        )
+        .send({
+          status:
+            'DISABLED',
+          reason:
+            'Tentative e2e interdite sur SUPER_ADMIN',
+        })
+        .expect(403);
+
+      /*
+       * 2. Meme principe pour la revocation
+       * administrative de toutes les sessions.
+       */
+      await request(app.getHttpServer())
+        .post(
+          `/api/auth/users/${protectedSuperAdmin.id}/logout-all`,
+        )
+        .set(
+          'Authorization',
+          `Bearer ${superAdminAccessToken}`,
+        )
+        .expect(403);
+
+      /*
+       * Aucune des deux tentatives ne doit
+       * modifier la cible.
+       */
+      const protectedAfter =
+        await prisma.user
+          .findUniqueOrThrow({
+            where: {
+              id:
+                protectedSuperAdmin.id,
+            },
+            select: {
+              platformRole: true,
+              status: true,
+              authVersion: true,
+            },
+          });
+
+      expect(protectedAfter)
+        .toEqual({
+          platformRole:
+            'SUPER_ADMIN',
+          status:
+            protectedSuperAdmin.status,
+          authVersion:
+            protectedSuperAdmin.authVersion,
+        });
+
+      /*
+       * Une operation refusee ne doit produire
+       * aucun faux audit de modification/revocation.
+       */
+      const forbiddenAuditCount =
+        await prisma.securityAuditLog
+          .count({
+            where: {
+              targetUserId:
+                protectedSuperAdmin.id,
+            },
+          });
+
+      expect(forbiddenAuditCount)
+        .toBe(0);
+    }
+    finally {
+      await prisma.securityAuditLog
+        .deleteMany({
+          where: {
+            OR: [
+              {
+                actorId:
+                  protectedSuperAdmin.id,
+              },
+              {
+                targetUserId:
+                  protectedSuperAdmin.id,
+              },
+            ],
+          },
+        });
+
+      await prisma.refreshSession
+        .deleteMany({
+          where: {
+            userId:
+              protectedSuperAdmin.id,
+          },
+        });
+
+      await prisma.user
+        .deleteMany({
+          where: {
+            id:
+              protectedSuperAdmin.id,
+          },
+        });
+    }
   });
   afterAll(async () => {
     const testIds = [
