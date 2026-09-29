@@ -3,47 +3,53 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRole, UserStatus } from '@prisma/client';
-import { ModerationAction, ModerationTargetType } from '@prisma/client';
+import {
+  ModerationAction,
+  ModerationTargetType,
+  SocialRole,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 
-type CurrentUser = {
+type CurrentSocialUser = {
   userId: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: UserRole;
-  status: UserStatus;
+  socialRole: SocialRole;
 };
 
 @Injectable()
 export class CommentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
   async create(
     postId: string,
     authorId: string,
-    createCommentDto: CreateCommentDto,
+    createCommentDto:
+      CreateCommentDto,
   ) {
-    const post = await this.prisma.post.findFirst({
-      where: {
-        id: postId,
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-      },
-    });
+    const post =
+      await this.prisma.post.findFirst({
+        where: {
+          id: postId,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
 
     if (!post) {
-      throw new NotFoundException('Publication introuvable');
+      throw new NotFoundException(
+        'Publication introuvable',
+      );
     }
 
     return this.prisma.comment.create({
       data: {
-        content: createCommentDto.content,
+        content:
+          createCommentDto.content,
         postId,
         authorId,
       },
@@ -67,19 +73,24 @@ export class CommentsService {
     });
   }
 
-  async findByPost(postId: string) {
-    const post = await this.prisma.post.findFirst({
-      where: {
-        id: postId,
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-      },
-    });
+  async findByPost(
+    postId: string,
+  ) {
+    const post =
+      await this.prisma.post.findFirst({
+        where: {
+          id: postId,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
 
     if (!post) {
-      throw new NotFoundException('Publication introuvable');
+      throw new NotFoundException(
+        'Publication introuvable',
+      );
     }
 
     return this.prisma.comment.findMany({
@@ -109,136 +120,182 @@ export class CommentsService {
     });
   }
 
-  async softDelete(id: string, currentUser: CurrentUser) {
-    const comment = await this.prisma.comment.findFirst({
-      where: {
-        id,
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        authorId: true,
-        post: {
-          select: {
-            deletedAt: true,
-          },
+  async softDelete(
+    id: string,
+    currentUser: CurrentSocialUser,
+  ) {
+    const comment =
+      await this.prisma.comment.findFirst({
+        where: {
+          id,
+          deletedAt: null,
         },
-      },
-    });
-
-    if (!comment || comment.post.deletedAt) {
-      throw new NotFoundException('Commentaire introuvable');
-    }
-
-    const isOwner = comment.authorId === currentUser.userId;
-
-    const canModerate =
-      currentUser.role === UserRole.MODERATOR ||
-      currentUser.role === UserRole.ADMIN ||
-      currentUser.role === UserRole.SUPER_ADMIN;
-
-    if (!isOwner && !canModerate) {
-      throw new ForbiddenException('Accès interdit');
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const deletedComment = await tx.comment.update({
-        where: { id },
-        data: {
-          deletedAt: new Date(),
-        },
-        include: {
-          author: {
+        select: {
+          id: true,
+          authorId: true,
+          post: {
             select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              role: true,
-              status: true,
-              createdAt: true,
-              updatedAt: true,
+              deletedAt: true,
             },
           },
         },
       });
 
-      await tx.moderationLog.create({
-        data: {
-          action: ModerationAction.COMMENT_DELETE,
-          targetType: ModerationTargetType.COMMENT,
-          targetId: id,
-          moderatorId: currentUser.userId,
-        },
-      });
+    if (
+      !comment ||
+      comment.post.deletedAt
+    ) {
+      throw new NotFoundException(
+        'Commentaire introuvable',
+      );
+    }
 
-      return deletedComment;
-    });
-  }
+    const isOwner =
+      comment.authorId ===
+      currentUser.userId;
 
-async update(id: string, updateCommentDto: UpdateCommentDto, currentUser: any) {
-  const comment = await this.prisma.comment.findFirst({
-    where: {
-      id,
-      deletedAt: null,
-    },
-  });
+    const canModerate =
+      currentUser.socialRole ===
+        SocialRole.MODERATOR ||
+      currentUser.socialRole ===
+        SocialRole.ADMIN;
 
-  if (!comment) {
-    throw new NotFoundException('Commentaire introuvable');
-  }
+    if (
+      !isOwner &&
+      !canModerate
+    ) {
+      throw new ForbiddenException(
+        'Accès interdit',
+      );
+    }
 
-  const canUpdate =
-    comment.authorId === currentUser.userId ||
-    currentUser.role === UserRole.ADMIN ||
-    currentUser.role === UserRole.SUPER_ADMIN;
+    return this.prisma.$transaction(
+      async (tx) => {
+        const deletedComment =
+          await tx.comment.update({
+            where: {
+              id,
+            },
+            data: {
+              deletedAt: new Date(),
+            },
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                  status: true,
+                  createdAt: true,
+                  updatedAt: true,
+                },
+              },
+            },
+          });
 
-  if (!canUpdate) {
-    throw new ForbiddenException(
-      'Vous n’êtes pas autorisé à modifier ce commentaire',
+        await tx.moderationLog.create({
+          data: {
+            action:
+              ModerationAction.COMMENT_DELETE,
+            targetType:
+              ModerationTargetType.COMMENT,
+            targetId: id,
+            moderatorId:
+              currentUser.userId,
+          },
+        });
+
+        return deletedComment;
+      },
     );
   }
 
-const isPrivilegedEdit =
-  comment.authorId !== currentUser.userId &&
-  (currentUser.role === UserRole.ADMIN ||
-    currentUser.role === UserRole.SUPER_ADMIN);
-
-return this.prisma.$transaction(async (tx) => {
-  const updatedComment = await tx.comment.update({
-    where: { id },
-    data: {
-      content: updateCommentDto.content,
-    },
-    include: {
-      author: {
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          role: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
+  async update(
+    id: string,
+    updateCommentDto:
+      UpdateCommentDto,
+    currentUser: CurrentSocialUser,
+  ) {
+    const comment =
+      await this.prisma.comment.findFirst({
+        where: {
+          id,
+          deletedAt: null,
         },
-      },
-    },
-  });
+      });
 
-  if (isPrivilegedEdit) {
-    await tx.moderationLog.create({
-      data: {
-        action: ModerationAction.COMMENT_UPDATE,
-        targetType: ModerationTargetType.COMMENT,
-        targetId: id,
-        moderatorId: currentUser.userId,
+    if (!comment) {
+      throw new NotFoundException(
+        'Commentaire introuvable',
+      );
+    }
+
+    const isOwner =
+      comment.authorId ===
+      currentUser.userId;
+
+    const isSocialAdmin =
+      currentUser.socialRole ===
+      SocialRole.ADMIN;
+
+    if (
+      !isOwner &&
+      !isSocialAdmin
+    ) {
+      throw new ForbiddenException(
+        'Vous n’êtes pas autorisé à modifier ce commentaire',
+      );
+    }
+
+    const isPrivilegedEdit =
+      !isOwner &&
+      isSocialAdmin;
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        const updatedComment =
+          await tx.comment.update({
+            where: {
+              id,
+            },
+            data: {
+              content:
+                updateCommentDto.content,
+            },
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                  status: true,
+                  createdAt: true,
+                  updatedAt: true,
+                },
+              },
+            },
+          });
+
+        if (isPrivilegedEdit) {
+          await tx.moderationLog.create({
+            data: {
+              action:
+                ModerationAction.COMMENT_UPDATE,
+              targetType:
+                ModerationTargetType.COMMENT,
+              targetId: id,
+              moderatorId:
+                currentUser.userId,
+            },
+          });
+        }
+
+        return updatedComment;
       },
-    });
+    );
   }
-
-  return updatedComment;
-});
-}
-
 }

@@ -29,6 +29,9 @@ const MODERATOR_EMAIL =
 const ADMIN_EMAIL =
   'e2e-content-admin@nexus.local';
 
+const CORE_ONLY_ADMIN_EMAIL =
+  'e2e-content-core-only-admin@nexus.local';
+
 const TEST_PASSWORD =
   'E2eContentPassword123!';
 
@@ -40,11 +43,13 @@ describe('Permissions de modification des contenus (e2e)', () => {
   let otherUserId: string;
   let moderatorId: string;
   let adminId: string;
+  let coreOnlyAdminId: string;
 
   let authorAccessToken: string;
   let otherUserAccessToken: string;
   let moderatorAccessToken: string;
   let adminAccessToken: string;
+  let coreOnlyAdminAccessToken: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule =
@@ -66,6 +71,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
       OTHER_USER_EMAIL,
       MODERATOR_EMAIL,
       ADMIN_EMAIL,
+      CORE_ONLY_ADMIN_EMAIL,
     ];
 
     const existingUsers =
@@ -147,6 +153,11 @@ describe('Permissions de modification des contenus (e2e)', () => {
           firstName: 'E2E',
           lastName: 'Author',
           role: 'USER',
+          socialProfile: {
+            create: {
+              role: 'USER',
+            },
+          },
         },
       });
 
@@ -158,6 +169,11 @@ describe('Permissions de modification des contenus (e2e)', () => {
           firstName: 'E2E',
           lastName: 'OtherUser',
           role: 'USER',
+          socialProfile: {
+            create: {
+              role: 'USER',
+            },
+          },
         },
       });
 
@@ -169,6 +185,11 @@ describe('Permissions de modification des contenus (e2e)', () => {
           firstName: 'E2E',
           lastName: 'ContentModerator',
           role: 'MODERATOR',
+          socialProfile: {
+            create: {
+              role: 'MODERATOR',
+            },
+          },
         },
       });
 
@@ -180,6 +201,23 @@ describe('Permissions de modification des contenus (e2e)', () => {
           firstName: 'E2E',
           lastName: 'ContentAdmin',
           role: 'ADMIN',
+          socialProfile: {
+            create: {
+              role: 'ADMIN',
+            },
+          },
+        },
+      });
+
+    const coreOnlyAdmin =
+      await prisma.user.create({
+        data: {
+          email: CORE_ONLY_ADMIN_EMAIL,
+          passwordHash,
+          firstName: 'E2E',
+          lastName: 'CoreOnlyContentAdmin',
+          role: 'SUPER_ADMIN',
+          platformRole: 'SUPER_ADMIN',
         },
       });
 
@@ -187,6 +225,8 @@ describe('Permissions de modification des contenus (e2e)', () => {
     otherUserId = otherUser.id;
     moderatorId = moderator.id;
     adminId = admin.id;
+    coreOnlyAdminId =
+      coreOnlyAdmin.id;
 
     const authorLogin =
       await request(app.getHttpServer())
@@ -220,6 +260,14 @@ describe('Permissions de modification des contenus (e2e)', () => {
           password: TEST_PASSWORD,
         });
 
+    const coreOnlyAdminLogin =
+      await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: CORE_ONLY_ADMIN_EMAIL,
+          password: TEST_PASSWORD,
+        });
+
     expect([200, 201]).toContain(
       authorLogin.status,
     );
@@ -236,6 +284,10 @@ describe('Permissions de modification des contenus (e2e)', () => {
       adminLogin.status,
     );
 
+    expect([200, 201]).toContain(
+      coreOnlyAdminLogin.status,
+    );
+
     authorAccessToken =
       authorLogin.body.accessToken;
 
@@ -247,6 +299,41 @@ describe('Permissions de modification des contenus (e2e)', () => {
 
     adminAccessToken =
       adminLogin.body.accessToken;
+
+    coreOnlyAdminAccessToken =
+      coreOnlyAdminLogin.body.accessToken;
+  });
+
+  it('refuse un administrateur CORE sans profil NEXUS Social sur Posts et Comments', async () => {
+    await request(app.getHttpServer())
+      .get('/api/posts')
+      .set(
+        'Authorization',
+        `Bearer ${coreOnlyAdminAccessToken}`,
+      )
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/api/posts')
+      .set(
+        'Authorization',
+        `Bearer ${coreOnlyAdminAccessToken}`,
+      )
+      .send({
+        content:
+          'Tentative CORE-only',
+      })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .get(
+        '/api/posts/00000000-0000-0000-0000-000000000000/comments',
+      )
+      .set(
+        'Authorization',
+        `Bearer ${coreOnlyAdminAccessToken}`,
+      )
+      .expect(403);
   });
 
   it('applique correctement les droits de modification d un post et l audit ADMIN', async () => {
@@ -334,7 +421,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
       })
       .expect(403);
 
-    // MODERATOR ne peut pas réécrire le contenu d'autrui
+    // MODERATOR ne peut pas rÃ©Ã©crire le contenu d'autrui
 
     await request(app.getHttpServer())
       .patch(`/api/posts/${postId}`)
@@ -371,7 +458,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
       'Post modifie par ADMIN',
     );
 
-    // Vérifier que le contenu final est bien celui de l'ADMIN
+    // VÃ©rifier que le contenu final est bien celui de l'ADMIN
 
     const postDetail =
       await request(app.getHttpServer())
@@ -387,7 +474,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
         'Post modifie par ADMIN',
       );
 
-    // Vérifier l'audit POST_UPDATE
+    // VÃ©rifier l'audit POST_UPDATE
 
     const adminUpdateLog =
       await prisma.moderationLog.findFirst({
@@ -413,7 +500,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
   });
 
   it('applique correctement les droits de modification d un commentaire et l audit ADMIN', async () => {
-  // 1. AUTHOR crée un post
+  // 1. AUTHOR crÃ©e un post
 
   const postResponse =
     await request(app.getHttpServer())
@@ -437,7 +524,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
   expect(postId)
     .toBeDefined();
 
-  // 2. AUTHOR crée un commentaire
+  // 2. AUTHOR crÃ©e un commentaire
 
   const commentResponse =
     await request(app.getHttpServer())
@@ -499,8 +586,8 @@ describe('Permissions de modification des contenus (e2e)', () => {
     'Commentaire modifie par son auteur',
   );
 
-  // 5. Vérifier qu'aucun audit COMMENT_UPDATE
-  // n'a été créé pour la modification par l'auteur
+  // 5. VÃ©rifier qu'aucun audit COMMENT_UPDATE
+  // n'a Ã©tÃ© crÃ©Ã© pour la modification par l'auteur
 
   const authorUpdateLogsAfter =
     await prisma.moderationLog.count({
@@ -530,7 +617,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
     })
     .expect(403);
 
-  // 7. MODERATOR ne peut pas réécrire
+  // 7. MODERATOR ne peut pas rÃ©Ã©crire
   // le commentaire d'un autre utilisateur
 
   await request(app.getHttpServer())
@@ -572,7 +659,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
     'Commentaire modifie par ADMIN',
   );
 
-  // 9. Vérifier le contenu final via GET comments
+  // 9. VÃ©rifier le contenu final via GET comments
 
   const commentsResponse =
     await request(app.getHttpServer())
@@ -599,7 +686,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
       'Commentaire modifie par ADMIN',
     );
 
-  // 10. Vérifier le log COMMENT_UPDATE
+  // 10. VÃ©rifier le log COMMENT_UPDATE
 
   const adminUpdateLog =
     await prisma.moderationLog.findFirst({
@@ -633,6 +720,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
             otherUserId,
             moderatorId,
             adminId,
+            coreOnlyAdminId,
           ],
         },
       },
@@ -648,6 +736,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
                 otherUserId,
                 moderatorId,
                 adminId,
+                coreOnlyAdminId,
               ],
             },
           },
@@ -658,6 +747,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
                 otherUserId,
                 moderatorId,
                 adminId,
+                coreOnlyAdminId,
               ],
             },
           },
@@ -673,6 +763,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
             otherUserId,
             moderatorId,
             adminId,
+            coreOnlyAdminId,
           ],
         },
       },
@@ -686,6 +777,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
             otherUserId,
             moderatorId,
             adminId,
+            coreOnlyAdminId,
           ],
         },
       },
@@ -699,6 +791,7 @@ describe('Permissions de modification des contenus (e2e)', () => {
             otherUserId,
             moderatorId,
             adminId,
+            coreOnlyAdminId,
           ],
         },
       },

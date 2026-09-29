@@ -9,38 +9,46 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { UserRole, UserStatus } from '@prisma/client';
+import { SocialRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SocialAccessGuard } from '../social/social-access.guard';
 import { CreateCommentDto } from './dto/create-comment.dto';
-import { CommentsService } from './comments.service';
 import { UpdateCommentDto } from './dto/update-comment.dto';
+import { CommentsService } from './comments.service';
 
-type RequestWithUser = {
+type RequestWithSocialUser = {
   user: {
     userId: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: UserRole;
-    status: UserStatus;
+    socialRole: SocialRole;
   };
 };
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(
+  JwtAuthGuard,
+  SocialAccessGuard,
+)
 @Controller()
 export class CommentsController {
-  constructor(private readonly commentsService: CommentsService) {}
+  constructor(
+    private readonly commentsService:
+      CommentsService,
+  ) {}
 
   @Get('posts/:postId/comments')
-  findByPost(@Param('postId') postId: string) {
-    return this.commentsService.findByPost(postId);
+  findByPost(
+    @Param('postId') postId: string,
+  ) {
+    return this.commentsService.findByPost(
+      postId,
+    );
   }
 
   @Post('posts/:postId/comments')
   create(
     @Param('postId') postId: string,
-    @Req() req: RequestWithUser,
-    @Body() createCommentDto: CreateCommentDto,
+    @Req() req: RequestWithSocialUser,
+    @Body() createCommentDto:
+      CreateCommentDto,
   ) {
     return this.commentsService.create(
       postId,
@@ -50,18 +58,27 @@ export class CommentsController {
   }
 
   @Delete('comments/:id')
-  softDelete(@Param('id') id: string, @Req() req: RequestWithUser) {
-    return this.commentsService.softDelete(id, req.user);
+  softDelete(
+    @Param('id') id: string,
+    @Req() req: RequestWithSocialUser,
+  ) {
+    return this.commentsService.softDelete(
+      id,
+      req.user,
+    );
   }
 
-@UseGuards(JwtAuthGuard)
-@Patch('comments/:id')
-update(
-  @Param('id') id: string,
-  @Body() updateCommentDto: UpdateCommentDto,
-  @Req() req: any,
-) {
-  return this.commentsService.update(id, updateCommentDto, req.user);
-}
-
+  @Patch('comments/:id')
+  update(
+    @Param('id') id: string,
+    @Body() updateCommentDto:
+      UpdateCommentDto,
+    @Req() req: RequestWithSocialUser,
+  ) {
+    return this.commentsService.update(
+      id,
+      updateCommentDto,
+      req.user,
+    );
+  }
 }

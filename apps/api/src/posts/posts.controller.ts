@@ -7,60 +7,76 @@ import {
   Patch,
   Post,
   Req,
-  UseGuards
+  UseGuards,
 } from '@nestjs/common';
-import { UserRole, UserStatus } from '@prisma/client';
+import { SocialRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SocialAccessGuard } from '../social/social-access.guard';
 import { CreatePostDto } from './dto/create-post.dto';
-import { PostsService } from './posts.service';
 import { UpdatePostDto } from './dto/update-post.dto';
+import { PostsService } from './posts.service';
 
-type RequestWithUser = {
+type RequestWithSocialUser = {
   user: {
     userId: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: UserRole;
-    status: UserStatus;
+    socialRole: SocialRole;
   };
 };
 
 @Controller('posts')
+@UseGuards(
+  JwtAuthGuard,
+  SocialAccessGuard,
+)
 export class PostsController {
-  constructor(private readonly postsService: PostsService) {}
+  constructor(
+    private readonly postsService: PostsService,
+  ) {}
 
-  @UseGuards(JwtAuthGuard)
   @Get()
   findAll() {
     return this.postsService.findAll();
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(
+    @Param('id') id: string,
+  ) {
     return this.postsService.findOne(id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Req() req: RequestWithUser, @Body() createPostDto: CreatePostDto) {
-    return this.postsService.create(req.user.userId, createPostDto);
+  create(
+    @Req() req: RequestWithSocialUser,
+    @Body() createPostDto: CreatePostDto,
+  ) {
+    return this.postsService.create(
+      req.user.userId,
+      createPostDto,
+    );
   }
 
-  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  softDelete(@Param('id') id: string, @Req() req: RequestWithUser) {
-    return this.postsService.softDelete(id, req.user);
+  softDelete(
+    @Param('id') id: string,
+    @Req() req: RequestWithSocialUser,
+  ) {
+    return this.postsService.softDelete(
+      id,
+      req.user,
+    );
   }
-  
-  @UseGuards(JwtAuthGuard)
+
   @Patch(':id')
   update(
     @Param('id') id: string,
     @Body() updatePostDto: UpdatePostDto,
-    @Req() req: RequestWithUser,
-    ) {
-        return this.postsService.update(id, updatePostDto, req.user);
-        }
+    @Req() req: RequestWithSocialUser,
+  ) {
+    return this.postsService.update(
+      id,
+      updatePostDto,
+      req.user,
+    );
+  }
 }
