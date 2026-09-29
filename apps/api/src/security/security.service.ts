@@ -54,6 +54,9 @@ export class SecurityService {
           previousPlatformRole: true,
           newPlatformRole: true,
 
+          // Audit acces applicatifs
+          applicationKey: true,
+
           createdAt: true,
 
           actor: {
