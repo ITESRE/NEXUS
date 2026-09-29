@@ -18,6 +18,18 @@ enum UserRole {
   SUPER_ADMIN
 }
 
+enum PlatformRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum SocialRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
 enum UserStatus {
   ACTIVE
   DISABLED
@@ -53,10 +65,12 @@ model User {
   passwordHash String
   firstName    String
   lastName     String
-  role         UserRole   @default(USER)
-  status       UserStatus @default(ACTIVE)
-  authVersion  Int        @default(0)
+  role         UserRole     @default(USER)
+  platformRole PlatformRole @default(USER)
+  status       UserStatus   @default(ACTIVE)
+  authVersion  Int          @default(0)
 
+  socialProfile SocialProfile?
   posts        Post[]
   comments     Comment[]
   moderationLogs ModerationLog[]
@@ -70,6 +84,18 @@ model User {
   updatedAt    DateTime   @updatedAt
 }
 
+model SocialProfile {
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  role      SocialRole @default(USER)
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([role])
+}
 model Post {
   id        String    @id @default(uuid())
   content   String
