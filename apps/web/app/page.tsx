@@ -748,10 +748,23 @@ export default function Home() {
             'ADMIN' ||
             user.platformRole ===
               'SUPER_ADMIN') && (
-            <aside className="mb-10 rounded-2xl border border-blue-400/10 bg-blue-400/[0.035] px-5 py-4">
-              <p className="text-sm text-blue-100">
-                Les fonctions d’administration CORE seront ajoutées dans le prochain lot.
-              </p>
+            <aside className="mb-10 flex flex-col gap-4 rounded-2xl border border-blue-400/10 bg-blue-400/[0.035] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-100">
+                  Administration CORE
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-blue-100/60">
+                  Consultez les utilisateurs et leurs accès applicatifs.
+                </p>
+              </div>
+
+              <a
+                href="/admin"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl border border-blue-300/15 bg-blue-300/[0.08] px-4 py-2.5 text-sm font-medium text-blue-100 transition hover:bg-blue-300/[0.13]"
+              >
+                Ouvrir l’administration
+              </a>
             </aside>
           )}
         </section>
